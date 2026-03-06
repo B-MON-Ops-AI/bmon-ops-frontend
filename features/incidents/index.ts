@@ -4,6 +4,7 @@
  * @module features/incidents
  */
 export { default as IncidentWallCard } from './ui/IncidentWallCard';
+export { default as IncidentRowItem } from './ui/IncidentRowItem';
 export { default as IncidentDetailDrawer } from './ui/IncidentDetailDrawer';
 export { default as AIAnalysisDialog } from './ui/AIAnalysisDialog';
 export { default as MuteDialog } from './ui/MuteDialog';

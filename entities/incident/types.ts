@@ -9,8 +9,10 @@ export type MetricType = 'error_rate' | 'response_time' | 'traffic' | 'request_c
 
 export interface Incident {
   id: string;
-  serviceId: string;
-  serviceName: string;
+  unitServiceId: string;    // 단위서비스ID
+  unitServiceName: string;  // 단위서비스명 (KOS-모바일 계약 등)
+  alarmName: string;        // 알람명
+  endpoint: string;         // 서비스명 (API ENDPOINT /~~/~~)
   metricType: MetricType;
   metricValue: number;
   baseline: number;

@@ -2,660 +2,237 @@
 
 /**
  * @file IncidentDetailDrawer.tsx
- * @description 인시던트 상세 다이얼로그 (메트릭, 액션, AI 분석 탭)
- * @module features/incidents/ui
+ * @description 인시던트 상세 다이얼로그 (해결 정보 및 추천 질문 복구 버전)
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import Dialog from '@mui/material/Dialog';
 import DialogContent from '@mui/material/DialogContent';
 import Box from '@mui/material/Box';
-import Grid from '@mui/material/Grid';
-import Tabs from '@mui/material/Tabs';
-import Tab from '@mui/material/Tab';
 import Typography from '@mui/material/Typography';
 import IconButton from '@mui/material/IconButton';
 import Button from '@mui/material/Button';
 import Divider from '@mui/material/Divider';
 import Chip from '@mui/material/Chip';
-import LinearProgress from '@mui/material/LinearProgress';
+import TextField from '@mui/material/TextField';
+import InputAdornment from '@mui/material/InputAdornment';
 import CircularProgress from '@mui/material/CircularProgress';
-import Tooltip from '@mui/material/Tooltip';
 import CloseIcon from '@mui/icons-material/Close';
 import CheckIcon from '@mui/icons-material/Check';
-import VolumeOffIcon from '@mui/icons-material/VolumeOff';
 import DoneAllIcon from '@mui/icons-material/DoneAll';
 import PsychologyIcon from '@mui/icons-material/Psychology';
-import RefreshIcon from '@mui/icons-material/Refresh';
-import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
-import LightbulbIcon from '@mui/icons-material/Lightbulb';
-import HistoryIcon from '@mui/icons-material/History';
-import TaskAltIcon from '@mui/icons-material/TaskAlt';
+import SendIcon from '@mui/icons-material/Send';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
-import TuneIcon from '@mui/icons-material/Tune';
-import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
-import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
+import LanIcon from '@mui/icons-material/Lan';
+import TaskAltIcon from '@mui/icons-material/TaskAlt';
+import ReactMarkdown from 'react-markdown';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import 'dayjs/locale/ko';
 import { SeverityChip, StatusChip } from '@/shared/ui';
-import MuteDialog from './MuteDialog';
-import ResolveDialog from './ResolveDialog';
-import { useAIAnalysis, useRequestAnalysis } from '@/features/incidents/model/useAI';
-import { useAckIncident, useMuteIncident, useResolveIncident } from '@/features/incidents/model/useIncidents';
-import { useAppDispatch, showSnackbar } from '@/shared/store';
+import { useSendChat } from '@/features/chat';
+import { useAckIncident } from '@/features/incidents/model/useIncidents';
 import type { Incident } from '@/entities/incident';
 
 dayjs.extend(relativeTime);
 dayjs.locale('ko');
 
 const metricLabels: Record<string, string> = {
-  error_rate: '에러율', response_time: '응답시간',
-  traffic: '트래픽', request_count: '요청수',
+  error_rate: '에러율', response_time: '응답시간', traffic: '트래픽', request_count: '요청수',
 };
 const metricUnits: Record<string, string> = {
   error_rate: '%', response_time: 'ms', traffic: 'req/s', request_count: 'req',
 };
 
-// ── 신뢰도 바 ───────────────────────────────────────────
+interface Message { id: string; role: 'user' | 'assistant'; content: string; createdAt: string; }
 
-function ConfidenceBar({ value, label }: { value: number; label: string }) {
-  const pct = Math.round(value * 100);
-  const color = pct >= 80 ? '#EF4444' : pct >= 60 ? '#F59E0B' : '#3B82F6';
-  return (
-    <Box sx={{ mb: 1.5 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-        <Typography variant="body2" sx={{ flex: 1, pr: 2 }}>{label}</Typography>
-        <Typography variant="body2" fontWeight={700} color={color}>{pct}%</Typography>
-      </Box>
-      <LinearProgress
-        variant="determinate"
-        value={pct}
-        sx={{
-          height: 6, borderRadius: 3,
-          backgroundColor: `${color}22`,
-          '& .MuiLinearProgress-bar': { backgroundColor: color, borderRadius: 3 },
-        }}
-      />
-    </Box>
-  );
-}
-
-// ── 유사 사례 카드 ──────────────────────────────────────
-
-function SimilarCaseCard({
-  sc, index,
-}: {
-  sc: { date: string; description: string; resolution: string };
-  index: number;
-}) {
-  // 순서에 따라 시각적 강도 구분 (첫 번째가 가장 유사)
-  const isFirst = index === 0;
-
-  return (
-    <Box
-      sx={{
-        p: 2.5,
-        borderRadius: 2,
-        border: isFirst
-          ? '1px solid rgba(99,102,241,0.4)'
-          : '1px solid rgba(255,255,255,0.07)',
-        backgroundColor: isFirst ? 'rgba(99,102,241,0.06)' : '#1a2233',
-        position: 'relative',
-        transition: 'border-color 0.15s ease',
-        '&:hover': {
-          borderColor: isFirst ? 'rgba(99,102,241,0.6)' : 'rgba(255,255,255,0.15)',
-        },
-      }}
-    >
-      {/* 순번 + 날짜 */}
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Box
-            sx={{
-              width: 22, height: 22,
-              borderRadius: '50%',
-              backgroundColor: isFirst ? '#6366F1' : 'rgba(255,255,255,0.1)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              flexShrink: 0,
-            }}
-          >
-            <Typography variant="caption" fontWeight={800} sx={{ fontSize: '0.6rem', color: '#fff' }}>
-              {index + 1}
-            </Typography>
-          </Box>
-          {isFirst && (
-            <Chip
-              label="가장 유사"
-              size="small"
-              sx={{
-                height: 18, fontSize: '0.6rem', fontWeight: 700,
-                backgroundColor: '#6366F122', color: '#818CF8',
-                border: '1px solid #6366F133',
-                '& .MuiChip-label': { px: 0.75 },
-              }}
-            />
-          )}
-        </Box>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-          <CalendarTodayIcon sx={{ fontSize: 12, color: 'text.disabled' }} />
-          <Typography variant="caption" color="text.disabled">{sc.date}</Typography>
-        </Box>
-      </Box>
-
-      {/* 사례 설명 */}
-      <Typography variant="body2" sx={{ mb: 1.5, lineHeight: 1.6 }}>
-        {sc.description}
-      </Typography>
-
-      {/* 해결 방법 */}
-      <Box
-        sx={{
-          p: 1.5,
-          borderRadius: 1.5,
-          backgroundColor: '#10B98112',
-          border: '1px solid #10B98130',
-        }}
-      >
-        <Box sx={{ display: 'flex', gap: 0.75, alignItems: 'flex-start' }}>
-          <LightbulbIcon sx={{ fontSize: 15, color: '#10B981', mt: 0.2, flexShrink: 0 }} />
-          <Box>
-            <Typography variant="caption" color="success.main" fontWeight={700}
-              sx={{ display: 'block', mb: 0.25 }}>
-              적용된 해결 방법
-            </Typography>
-            <Typography variant="body2" color="success.light" sx={{ lineHeight: 1.6 }}>
-              {sc.resolution}
-            </Typography>
-          </Box>
-        </Box>
-      </Box>
-
-      {/* 참고하기 버튼 */}
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1.5 }}>
-        <Button
-          size="small"
-          endIcon={<ArrowForwardIcon sx={{ fontSize: 13 }} />}
-          sx={{
-            fontSize: '0.72rem',
-            color: isFirst ? '#818CF8' : 'text.disabled',
-            '&:hover': { color: isFirst ? '#A5B4FC' : 'text.secondary' },
-          }}
-        >
-          이 방법 참고하기
-        </Button>
-      </Box>
-    </Box>
-  );
-}
-
-// ── 메인 컴포넌트 ──────────────────────────────────────
-
-interface Props {
-  incident: Incident | null;
-  onClose: () => void;
-}
+interface Props { incident: Incident | null; onClose: () => void; }
 
 export default function IncidentDetailDrawer({ incident, onClose }: Props) {
-  const dispatch = useAppDispatch();
   const open = !!incident;
-  const [muteOpen, setMuteOpen]     = useState(false);
-  const [resolveOpen, setResolveOpen] = useState(false);
-  const [aiTab, setAiTab]           = useState(0); // 0=유사사례, 1=원인분석, 2=권장조치, 3=변화내역
+  const [chatInput, setChatInput] = useState('');
+  const [messages, setMessages] = useState<Message[]>([]);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-  const { data: analysis, isLoading: analysisLoading } = useAIAnalysis(incident?.id ?? null);
-  const { mutate: requestAnalysis, isPending: requesting } = useRequestAnalysis();
-  const { mutate: ack,     isPending: acking }   = useAckIncident();
-  const { mutate: mute,    isPending: muting }    = useMuteIncident();
-  const { mutate: resolve, isPending: resolving } = useResolveIncident();
+  const { mutate: sendChat, isPending: isChatting } = useSendChat();
+  const { mutate: ack, isPending: acking } = useAckIncident();
 
-  // 드로어 열릴 때 분석 없으면 자동 시작
   useEffect(() => {
-    if (open && incident && !analysisLoading && !analysis && !requesting) {
-      requestAnalysis(incident.id, { onError: () => {} });
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [messages, isChatting]);
+
+  useEffect(() => {
+    if (open && incident) {
+      setMessages([{
+        id: 'welcome',
+        role: 'assistant',
+        content: `안녕하세요! **${incident.unitServiceName}** 분석 에이전트입니다.`,
+        createdAt: new Date().toISOString(),
+      }]);
     }
-  }, [open, incident?.id]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // 새 인시던트 열 때 탭을 유사사례(0)로 초기화
-  useEffect(() => {
-    if (open) setAiTab(0);
   }, [incident?.id, open]);
 
   if (!incident) return null;
 
+  const isResolved = incident.status === 'resolved';
   const isOpen     = incident.status === 'open';
   const isCritical = incident.severity === 'critical';
-  const result     = analysis?.status === 'completed' ? analysis.result : null;
 
-  const handleAck = () =>
-    ack(incident.id, {
-      onSuccess: () => dispatch(showSnackbar({ message: '인시던트를 확인했습니다.', severity: 'success' })),
-      onError:   () => dispatch(showSnackbar({ message: '처리에 실패했습니다.', severity: 'error' })),
+  const handleSendMessage = (text: string) => {
+    if (!text.trim() || isChatting) return;
+    const userMsg: Message = { id: `user-${Date.now()}`, role: 'user', content: text, createdAt: new Date().toISOString() };
+    setMessages(prev => [...prev, userMsg]);
+    setChatInput('');
+    sendChat({ query: `[Incident: ${incident.id}] ${text}` }, {
+      onSuccess: (data) => {
+        setMessages(prev => [...prev, { id: `ai-${Date.now()}`, role: 'assistant', content: data.answer.summary, createdAt: new Date().toISOString() }]);
+      }
     });
-
-  const handleMute = (minutes: number) =>
-    mute({ incidentId: incident.id, minutes }, {
-      onSuccess: () => { setMuteOpen(false); dispatch(showSnackbar({ message: `${minutes}분 음소거되었습니다.`, severity: 'success' })); },
-      onError:   () => dispatch(showSnackbar({ message: '처리에 실패했습니다.', severity: 'error' })),
-    });
-
-  const handleResolve = (resolution: string) =>
-    resolve({ incidentId: incident.id, resolution }, {
-      onSuccess: () => { setResolveOpen(false); dispatch(showSnackbar({ message: '인시던트가 해결되었습니다.', severity: 'success' })); },
-      onError:   () => dispatch(showSnackbar({ message: '처리에 실패했습니다.', severity: 'error' })),
-    });
-
-  const handleReanalyze = () =>
-    requestAnalysis(incident.id, {
-      onError: () => dispatch(showSnackbar({ message: 'AI 분석 요청에 실패했습니다.', severity: 'error' })),
-    });
-
-  // ── AI 로딩·진행·실패 상태 ──────────────────────────────
-  const renderAIStatus = () => {
-    if (analysisLoading) {
-      return (
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 4, justifyContent: 'center' }}>
-          <CircularProgress size={20} />
-          <Typography variant="body2" color="text.secondary">분석 불러오는 중...</Typography>
-        </Box>
-      );
-    }
-    if (!analysis || analysis.status === 'pending' || analysis.status === 'in_progress' || requesting) {
-      const progress = analysis?.progress ?? 0;
-      const step = analysis?.currentStep ?? 'AI 분석을 준비 중입니다...';
-      return (
-        <Box sx={{ py: 3 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-            <CircularProgress size={18} color="primary" />
-            <Typography variant="body2" color="primary.main" fontWeight={500}>{step}</Typography>
-          </Box>
-          <LinearProgress
-            variant={progress > 0 ? 'determinate' : 'indeterminate'}
-            value={progress}
-            sx={{ height: 6, borderRadius: 3 }}
-          />
-          {progress > 0 && (
-            <Typography variant="caption" color="text.secondary" display="block" textAlign="right" mt={0.5}>
-              {progress}%
-            </Typography>
-          )}
-        </Box>
-      );
-    }
-    if (analysis.status === 'failed') {
-      return (
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 3 }}>
-          <Typography variant="body2" color="error">분석에 실패했습니다.</Typography>
-          <Button size="small" startIcon={<RefreshIcon />} onClick={handleReanalyze}>재시도</Button>
-        </Box>
-      );
-    }
-    return null; // 완료 상태: 탭 콘텐츠로 렌더링
   };
 
-  // ── 탭 콘텐츠 렌더 ─────────────────────────────────────
-  const renderTabContent = () => {
-    if (!result) return null;
-
-    // 유사 사례 탭
-    if (aiTab === 0) {
-      if (result.similarCases.length === 0) {
-        return (
-          <Box
-            sx={{
-              textAlign: 'center', py: 6,
-              border: '1px dashed rgba(255,255,255,0.1)',
-              borderRadius: 2,
-            }}
-          >
-            <HistoryIcon sx={{ fontSize: 40, color: 'text.disabled', mb: 1 }} />
-            <Typography variant="body2" color="text.secondary">
-              유사 사례를 찾지 못했습니다.
-            </Typography>
-            <Typography variant="caption" color="text.disabled" display="block" mt={0.5}>
-              이 인시던트는 처음 발생하는 유형일 수 있습니다.
-            </Typography>
-          </Box>
-        );
-      }
-      return (
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-            <Typography variant="caption" color="text.disabled">
-              총 {result.similarCases.length}건의 유사 사례가 발견되었습니다.
-            </Typography>
-            <Chip label="과거 이력 기반" size="small"
-              sx={{ fontSize: '0.6rem', height: 16, backgroundColor: 'rgba(99,102,241,0.12)', color: '#818CF8', '& .MuiChip-label': { px: 0.75 } }} />
-          </Box>
-          {result.similarCases.map((sc: { date: string; description: string; resolution: string }, i: number) => (
-            <SimilarCaseCard key={i} sc={sc} index={i} />
-          ))}
-        </Box>
-      );
-    }
-
-    // 원인 분석 탭
-    if (aiTab === 1) {
-      return (
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
-          <Typography variant="caption" color="text.disabled" mb={0.5}>
-            {result.whyHappened.length}개 원인 요소 · 신뢰도 기반 정렬
-          </Typography>
-          {result.whyHappened.map((cause: { cause: string; confidence: number }, i: number) => (
-            <ConfidenceBar key={i} value={cause.confidence} label={cause.cause} />
-          ))}
-        </Box>
-      );
-    }
-
-    // 권장 조치 탭
-    if (aiTab === 2) {
-      return (
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
-          <Typography variant="caption" color="text.disabled" mb={0.5}>
-            우선순위 순으로 정렬된 조치 항목입니다.
-          </Typography>
-          {result.recommendedActions.map((action: string, i: number) => (
-            <Box
-              key={i}
-              sx={{
-                display: 'flex', gap: 1.5, p: 1.5,
-                borderRadius: 1.5,
-                backgroundColor: '#1a2233',
-                border: '1px solid #10B98122',
-                alignItems: 'flex-start',
-              }}
-            >
-              <Box sx={{ minWidth: 24, height: 24, borderRadius: '50%',
-                backgroundColor: '#10B98122', border: '1px solid #10B98155',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', mt: 0.1, flexShrink: 0 }}>
-                <Typography variant="caption" fontWeight={800} color="success.main" sx={{ fontSize: '0.65rem' }}>{i + 1}</Typography>
-              </Box>
-              <Typography variant="body2" sx={{ lineHeight: 1.7 }}>{action}</Typography>
-            </Box>
-          ))}
-        </Box>
-      );
-    }
-
-    // 변화 내역 탭
-    if (aiTab === 3) {
-      return (
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-          <Typography variant="caption" color="text.disabled" mb={0.5}>
-            인시던트 발생 시점에 감지된 변화입니다.
-          </Typography>
-          {result.whatChanged.map((item: string, i: number) => (
-            <Box
-              key={i}
-              sx={{
-                display: 'flex', gap: 1.5, p: 1.5,
-                borderRadius: 1.5,
-                backgroundColor: '#1a2233',
-                border: '1px solid rgba(245,158,11,0.15)',
-                alignItems: 'flex-start',
-              }}
-            >
-              <ErrorOutlineIcon sx={{ fontSize: 16, color: '#F59E0B', mt: 0.2, flexShrink: 0 }} />
-              <Typography variant="body2" sx={{ lineHeight: 1.7 }}>{item}</Typography>
-            </Box>
-          ))}
-        </Box>
-      );
-    }
-
-    return null;
+  const scrollContainerStyle = {
+    flex: 1, minHeight: 0, overflowY: 'auto',
+    '&::-webkit-scrollbar': { width: '8px' },
+    '&::-webkit-scrollbar-thumb': { backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: '4px' },
   };
 
   return (
-    <>
-      <Dialog
-        open={open}
-        onClose={onClose}
-        maxWidth="lg"
-        fullWidth
-        PaperProps={{
-          sx: {
-            backgroundColor: '#111827',
-            backgroundImage: 'none',
-            border: isCritical ? '1px solid #DC262666' : '1px solid rgba(255,255,255,0.1)',
-            borderRadius: 2,
-            overflow: 'hidden',
-            maxHeight: '90vh',
-          },
-        }}
-      >
-        {/* ── 다이얼로그 헤더 ── */}
-        <Box
-          sx={{
-            px: 3, py: 2,
-            borderBottom: '1px solid rgba(255,255,255,0.08)',
-            backgroundColor: isCritical ? '#DC262608' : '#0d1117',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 1.5,
-            flexShrink: 0,
-          }}
-        >
-          {isCritical && (
-            <Box sx={{
-              width: 10, height: 10, borderRadius: '50%',
-              backgroundColor: '#DC2626', boxShadow: '0 0 8px #DC2626',
-              animation: 'pulse 2s ease-in-out infinite', flexShrink: 0,
-            }} />
-          )}
-          <SeverityChip severity={incident.severity} />
-          <StatusChip status={incident.status} />
-          <Typography variant="h6" fontWeight={700} sx={{ flex: 1 }}>
-            {incident.serviceName}
-          </Typography>
-          <IconButton size="small" onClick={onClose}>
-            <CloseIcon fontSize="small" />
-          </IconButton>
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth="xl"
+      fullWidth
+      PaperProps={{
+        sx: {
+          backgroundColor: '#111827', backgroundImage: 'none', border: '1px solid rgba(255,255,255,0.1)',
+          borderRadius: 2, height: '85vh', display: 'flex', flexDirection: 'column',
+        },
+      }}
+    >
+      {/* 헤더 */}
+      <Box sx={{ p: 2, borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <SeverityChip severity={incident.severity} size="small" />
+          <StatusChip status={incident.status} size="small" />
+          <Typography variant="subtitle1" fontWeight={800} color="#fff">{incident.alarmName}</Typography>
         </Box>
+        <IconButton onClick={onClose} color="inherit" size="small"><CloseIcon fontSize="small" /></IconButton>
+      </Box>
 
-        {/* ── 메인 2-패널 ── */}
-        <DialogContent sx={{ p: 0, display: 'flex', overflow: 'hidden', flex: 1 }}>
-          <Grid container sx={{ flex: 1, overflow: 'hidden' }}>
-
-            {/* ── 왼쪽: 인시던트 상세 + 액션 ── */}
-            <Grid item xs={12} md={5}
-              sx={{
-                borderRight: { md: '1px solid rgba(255,255,255,0.08)' },
-                borderBottom: { xs: '1px solid rgba(255,255,255,0.08)', md: 'none' },
-                display: 'flex', flexDirection: 'column',
-                overflowY: 'auto', p: 3,
-              }}
-            >
-              {/* 메트릭 수치 */}
-              <Box sx={{ mb: 2 }}>
-                <Typography variant="caption" color="text.disabled"
-                  sx={{ textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: '0.65rem' }}>
-                  {metricLabels[incident.metricType]}
+      <DialogContent sx={{ p: 0, display: 'flex', flex: 1, overflow: 'hidden' }}>
+        <Box sx={{ display: 'flex', width: '100%', height: '100%' }}>
+          
+          {/* 왼쪽 정보 패널 */}
+          <Box sx={{ width: '38%', display: 'flex', flexDirection: 'column', borderRight: '1px solid rgba(255,255,255,0.08)', backgroundColor: '#161e2e', p: 2.5 }}>
+            <Box sx={{ ...scrollContainerStyle }}>
+              {/* 1. 서비스 정보 */}
+              <Box sx={{ mb: 3 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                  <LanIcon sx={{ color: 'text.disabled', fontSize: 16 }} />
+                  <Typography variant="body2" color="text.secondary" fontWeight={600}>{incident.unitServiceName} ({incident.unitServiceId})</Typography>
+                </Box>
+                <Typography variant="h6" sx={{ color: '#fff', fontWeight: 900, fontFamily: 'monospace', wordBreak: 'break-all', lineHeight: 1.2 }}>
+                  {incident.endpoint}
                 </Typography>
-                <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mt: 0.5 }}>
-                  <Typography variant="h3" fontWeight={800} color="error.main" sx={{ lineHeight: 1 }}>
-                    {incident.metricValue.toLocaleString()}
-                  </Typography>
-                  <Typography variant="h6" color="error.light">
-                    {metricUnits[incident.metricType]}
-                  </Typography>
-                </Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
-                  <Chip label={`+${incident.changePercent}%`} size="small"
-                    sx={{ backgroundColor: '#EF444422', color: '#EF4444', fontWeight: 700, fontSize: '0.75rem' }} />
-                  <Typography variant="caption" color="text.disabled">
-                    기준 {incident.baseline.toLocaleString()} {metricUnits[incident.metricType]}
-                  </Typography>
+              </Box>
+
+              {/* 2. 데이터 섹션 */}
+              <Box sx={{ mb: 3, p: 2, borderRadius: 1.5, backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Box>
+                    <Typography variant="caption" color="text.disabled" sx={{ fontWeight: 800, display: 'block' }}>측정된 값</Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1 }}>
+                      <Typography variant="h4" fontWeight={900} color={isResolved ? 'text.secondary' : isCritical ? '#FF4D4D' : 'primary.main'}>{incident.metricValue.toLocaleString()}</Typography>
+                      <Typography variant="body2" color="text.secondary" fontWeight={700}>{metricUnits[incident.metricType]}</Typography>
+                    </Box>
+                  </Box>
+                  <Divider orientation="vertical" flexItem sx={{ mx: 2, borderColor: 'rgba(255,255,255,0.05)' }} />
+                  <Box sx={{ flex: 1 }}>
+                    <Typography variant="caption" color="text.disabled" sx={{ fontWeight: 800, display: 'block' }}>검출 기준</Typography>
+                    <Typography variant="subtitle1" color="text.primary" fontWeight={800}>{metricLabels[incident.metricType]} {'>'} {incident.baseline}{metricUnits[incident.metricType]}</Typography>
+                  </Box>
                 </Box>
               </Box>
 
-              <Divider sx={{ borderColor: 'rgba(255,255,255,0.06)', mb: 2 }} />
-
-              {/* 메타데이터 */}
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mb: 3 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <AccessTimeIcon sx={{ fontSize: 14, color: 'text.disabled' }} />
-                  <Typography variant="caption" color="text.secondary">
-                    발생: {dayjs(incident.occurredAt).format('YYYY-MM-DD HH:mm')}
-                    <Typography component="span" variant="caption" color="text.disabled">
-                      {' '}({dayjs(incident.occurredAt).fromNow()})
-                    </Typography>
+              {/* 3. 해결 정보 (RESOLVED) */}
+              {isResolved && incident.resolution && (
+                <Box sx={{ mb: 3, p: 2, borderRadius: 1.5, backgroundColor: 'rgba(16, 185, 129, 0.05)', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                    <TaskAltIcon sx={{ color: '#10B981', fontSize: 18 }} />
+                    <Typography variant="subtitle2" color="#10B981" fontWeight={900}>조치 내용 (RESOLUTION)</Typography>
+                  </Box>
+                  <Typography variant="body2" sx={{ color: '#e5e7eb', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+                    {incident.resolution}
                   </Typography>
+                  <Box sx={{ mt: 1.5, display: 'flex', justifyContent: 'flex-end' }}>
+                    <Typography variant="caption" color="text.disabled">
+                      해결: {incident.resolvedBy} · {dayjs(incident.resolvedAt).format('YYYY-MM-DD HH:mm')}
+                    </Typography>
+                  </Box>
                 </Box>
-                {incident.ackedBy && (
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <CheckIcon sx={{ fontSize: 14, color: '#10B981' }} />
-                    <Typography variant="caption" color="text.secondary">
-                      확인: {incident.ackedBy} · {dayjs(incident.ackedAt).format('HH:mm')}
-                    </Typography>
-                  </Box>
-                )}
-                {incident.mutedBy && (
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <VolumeOffIcon sx={{ fontSize: 14, color: '#F59E0B' }} />
-                    <Typography variant="caption" color="text.secondary">
-                      음소거: {incident.mutedBy} · {dayjs(incident.mutedUntil).format('HH:mm')}까지
-                    </Typography>
-                  </Box>
-                )}
-                {incident.resolvedBy && (
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <DoneAllIcon sx={{ fontSize: 14, color: '#10B981' }} />
-                    <Typography variant="caption" color="text.secondary">
-                      해결: {incident.resolvedBy} · {dayjs(incident.resolvedAt).format('HH:mm')}
-                    </Typography>
-                  </Box>
-                )}
-                {incident.resolution && (
-                  <Box sx={{ mt: 0.5, p: 1.5, borderRadius: 1, backgroundColor: '#10B98110', border: '1px solid #10B98130' }}>
-                    <Typography variant="caption" color="success.main">{incident.resolution}</Typography>
-                  </Box>
-                )}
+              )}
+
+              {/* 4. 시간 정보 */}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 3 }}>
+                <AccessTimeIcon sx={{ color: 'text.disabled', fontSize: 16 }} />
+                <Typography variant="body2" color="text.secondary">최초 감지: <Typography component="span" variant="body2" fontWeight={700} color="#fff">{dayjs(incident.occurredAt).format('YYYY-MM-DD HH:mm:ss')}</Typography></Typography>
               </Box>
+            </Box>
 
-              <Divider sx={{ borderColor: 'rgba(255,255,255,0.06)', mb: 2 }} />
-
-              {/* 액션 버튼 */}
-              <Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1.5 }}>
-                  <TuneIcon sx={{ fontSize: 14, color: 'text.disabled' }} />
-                  <Typography variant="caption" color="text.disabled" fontWeight={600}
-                    sx={{ textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: '0.65rem' }}>
-                    인시던트 처리
-                  </Typography>
-                </Box>
+            {/* 5. 액션 버튼 (고정) */}
+            {!isResolved && (
+              <Box sx={{ mt: 'auto', pt: 2, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                  {isOpen && (
-                    <Button fullWidth variant="outlined" startIcon={<CheckIcon />}
-                      onClick={handleAck} disabled={acking} sx={{ justifyContent: 'flex-start' }}>
-                      확인 처리
-                    </Button>
-                  )}
-                  {incident.status !== 'muted' && (
-                    <Button fullWidth variant="outlined" startIcon={<VolumeOffIcon />}
-                      onClick={() => setMuteOpen(true)} color="warning" sx={{ justifyContent: 'flex-start' }}>
-                      알림 음소거
-                    </Button>
-                  )}
-                  {incident.status !== 'resolved' && (
-                    <Button fullWidth variant="outlined" startIcon={<DoneAllIcon />}
-                      onClick={() => setResolveOpen(true)} color="success" sx={{ justifyContent: 'flex-start' }}>
-                      해결 완료 처리
-                    </Button>
-                  )}
-                </Box>
-              </Box>
-            </Grid>
-
-            {/* ── 오른쪽: AI 분석 탭 ── */}
-            <Grid item xs={12} md={7}
-              sx={{ display: 'flex', flexDirection: 'column', backgroundColor: '#0d1117', overflow: 'hidden' }}
-            >
-              {/* AI 헤더 */}
-              <Box
-                sx={{
-                  px: 3, pt: 2, pb: 0,
-                  borderBottom: '1px solid rgba(255,255,255,0.06)',
-                  flexShrink: 0,
-                }}
-              >
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <PsychologyIcon color="primary" fontSize="small" />
-                    <Typography variant="subtitle1" fontWeight={700}>AI 분석</Typography>
-                    {analysis?.status === 'completed' && (
-                      <Chip label="완료" size="small"
-                        sx={{ backgroundColor: '#10B98122', color: '#10B981', fontSize: '0.65rem', height: 18 }} />
-                    )}
+                  {isOpen && <Button fullWidth variant="contained" onClick={() => ack(incident.id)} disabled={acking} sx={{ py: 1, fontWeight: 800 }}>인시던트 접수</Button>}
+                  <Box sx={{ display: 'flex', gap: 1 }}>
+                    <Button fullWidth variant="outlined" color="warning" size="small" sx={{ fontWeight: 700 }}>Mute</Button>
+                    <Button fullWidth variant="outlined" color="success" size="small" sx={{ fontWeight: 700 }}>Resolve</Button>
                   </Box>
-                  {analysis?.status === 'completed' && (
-                    <Tooltip title="재분석">
-                      <IconButton size="small" onClick={handleReanalyze} disabled={requesting}>
-                        <RefreshIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                  )}
                 </Box>
-
-                {/* 탭 바 — 분석 완료 시만 표시 */}
-                {result && (
-                  <Tabs
-                    value={aiTab}
-                    onChange={(_, v) => setAiTab(v)}
-                    sx={{
-                      minHeight: 36,
-                      '& .MuiTabs-indicator': { backgroundColor: '#6366F1', height: 2 },
-                      '& .MuiTab-root': {
-                        minHeight: 36, py: 0, px: 1.5,
-                        fontSize: '0.78rem', fontWeight: 500,
-                        color: 'text.disabled',
-                        '&.Mui-selected': { color: '#818CF8', fontWeight: 700 },
-                      },
-                    }}
-                  >
-                    {/* 유사 사례 — 강조 */}
-                    <Tab
-                      icon={<HistoryIcon sx={{ fontSize: 15 }} />}
-                      iconPosition="start"
-                      label={
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                          유사 사례
-                          {result.similarCases.length > 0 && (
-                            <Box
-                              sx={{
-                                minWidth: 16, height: 16, px: 0.25, borderRadius: '8px',
-                                backgroundColor: aiTab === 0 ? '#6366F1' : 'rgba(255,255,255,0.15)',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              }}
-                            >
-                              <Typography sx={{ fontSize: '0.55rem', fontWeight: 800, lineHeight: 1, color: '#fff' }}>
-                                {result.similarCases.length}
-                              </Typography>
-                            </Box>
-                          )}
-                        </Box>
-                      }
-                    />
-                    <Tab icon={<PsychologyIcon sx={{ fontSize: 15 }} />} iconPosition="start" label="원인 분석" />
-                    <Tab icon={<TaskAltIcon sx={{ fontSize: 15 }} />} iconPosition="start" label="권장 조치" />
-                    <Tab icon={<ErrorOutlineIcon sx={{ fontSize: 15 }} />} iconPosition="start" label="변화 내역" />
-                  </Tabs>
-                )}
               </Box>
+            )}
+          </Box>
 
-              {/* 탭 콘텐츠 */}
-              <Box sx={{ flex: 1, overflowY: 'auto', p: 3 }}>
-                {renderAIStatus() ?? renderTabContent()}
+          {/* 오른쪽 채팅 패널 */}
+          <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', backgroundColor: '#0d1117' }}>
+            <Box sx={{ px: 2, py: 1.5, borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', gap: 1 }}>
+              <PsychologyIcon sx={{ color: '#818CF8', fontSize: 20 }} />
+              <Typography variant="body2" fontWeight={800}>AI Diagnostic Agent</Typography>
+            </Box>
+            
+            <Box ref={scrollRef} sx={{ flex: 1, overflowY: 'auto', p: 2, display: 'flex', flexDirection: 'column', gap: 2, backgroundColor: '#0a0e14' }}>
+              {messages.map((msg) => (
+                <Box key={msg.id} sx={{ display: 'flex', flexDirection: 'column', alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
+                  <Box sx={{ maxWidth: '85%', px: 2, py: 1, borderRadius: 1.5, backgroundColor: msg.role === 'user' ? 'primary.main' : '#1e293b', color: '#fff', fontSize: '0.85rem' }}>
+                    {msg.role === 'assistant' ? <ReactMarkdown>{msg.content}</ReactMarkdown> : <Typography variant="body2" fontSize="inherit">{msg.content}</Typography>}
+                  </Box>
+                </Box>
+              ))}
+              {isChatting && <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, ml: 1 }}><CircularProgress size={16} /><Typography variant="caption" color="text.secondary">분석 중...</Typography></Box>}
+            </Box>
+
+            {/* 추천 질문 및 입력 바 */}
+            <Box sx={{ p: 2, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+              <Box sx={{ display: 'flex', gap: 1, mb: 1.5, overflowX: 'auto', pb: 0.5 }}>
+                {['과거 발생 이력', '동일 서비스 장애', '주간 발생 추이'].map((label, i) => (
+                  <Chip 
+                    key={i} label={label} size="small" clickable 
+                    onClick={() => handleSendMessage(label + ' 알려줘.')}
+                    sx={{ backgroundColor: 'rgba(255,255,255,0.05)', color: 'text.secondary', fontSize: '0.7rem', '&:hover': { backgroundColor: 'rgba(129, 140, 248, 0.1)', color: '#818CF8' } }} 
+                  />
+                ))}
               </Box>
-            </Grid>
-
-          </Grid>
-        </DialogContent>
-      </Dialog>
-
-      <MuteDialog open={muteOpen} onClose={() => setMuteOpen(false)} onConfirm={handleMute} isPending={muting} />
-      <ResolveDialog open={resolveOpen} onClose={() => setResolveOpen(false)} onConfirm={handleResolve} isPending={resolving} />
-    </>
+              <TextField 
+                fullWidth multiline maxRows={3} placeholder="에이전트에게 질문하세요..." 
+                value={chatInput} onChange={(e) => setChatInput(e.target.value)} 
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(chatInput); } }} 
+                disabled={isChatting} size="small"
+                InputProps={{ endAdornment: <InputAdornment position="end"><IconButton onClick={() => handleSendMessage(chatInput)} color="primary" size="small"><SendIcon fontSize="small" /></IconButton></InputAdornment> }}
+              />
+            </Box>
+          </Box>
+        </Box>
+      </DialogContent>
+    </Dialog>
   );
 }

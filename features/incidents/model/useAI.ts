@@ -1,6 +1,6 @@
 /**
  * @file useAI.ts
- * @description AI 분석 요청·조회 커스텀 훅
+ * @description AI 분석 요청·조회 및 초안 생성 커스텀 훅
  * @module features/incidents/model
  */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -29,5 +29,13 @@ export function useRequestAnalysis() {
     onSuccess: (_data, incidentId) => {
       qc.invalidateQueries({ queryKey: ['ai-analysis', incidentId] });
     },
+  });
+}
+
+/** 해결 보고서 초안 생성 뮤테이션 */
+export function useGenerateDraft() {
+  return useMutation({
+    mutationFn: ({ incidentId, context }: { incidentId: string; context?: string }) => 
+      aiApi.generateResolutionDraft(incidentId, context),
   });
 }
