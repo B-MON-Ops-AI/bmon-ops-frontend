@@ -237,60 +237,210 @@ npm run dev
 
 ## 배포
 
-### 프로덕션 빌드
+### 배포 환경
+
+| 항목 | 내용 |
+|------|------|
+| 대상 서버 OS | Oracle Linux 6.5 / RHEL 6.5 |
+| 웹서버 | Apache 2.2.29 |
+| 포트 | 19090 |
+| 빌드 방식 | Static Export (Node.js 불필요) |
+| 네트워크 | 망분리 환경 (외부망 차단) |
+
+### 빌드 방법 (로컬 - 외부망)
 
 ```bash
+# 1. 의존성 설치
+npm install
+
+# 2. Static Export 빌드
 npm run build
-npm run start
 ```
 
-### 컨테이너 배포
+빌드 완료 후 `out/` 디렉토리에 순수 HTML/CSS/JS 파일이 생성됩니다.
 
-프로젝트 루트의 배포 가이드 문서를 참조하세요.
+> `next.config.ts`에 `output: 'export'`가 설정되어 있어 Node.js 없이 정적 파일만으로 실행 가능합니다.
 
-| 문서 | 경로 |
-|------|------|
-| 컨테이너 이미지 빌드 | `deployment/container/build-image.md` |
-| 컨테이너 실행 | `deployment/container/run-container-guide.md` |
-| Kubernetes 배포 | 배포 가이드 참조 |
-| CI/CD (Jenkins) | 배포 가이드 참조 |
-| CI/CD (GitHub Actions) | 배포 가이드 참조 |
+### 산출물 압축 (로컬)
 
+```bash
+tar -czf bmon-ops-frontend.tar.gz -C out .
+```
 
+반입 파일: `bmon-ops-frontend.tar.gz` (1개)
+
+### 서버 배포 (망분리 서버)
+
+#### 1. 디렉토리 구조 생성
+
+```bash
+mkdir -p /app/bmon-ops/{conf,html}
+```
+
+```
+/app/bmon-ops/
+├── conf/
+│   └── httpd.conf        # 독립 Apache 설정
+├── html/                  # 프론트엔드 산출물
+├── start.sh               # 기동 스크립트
+└── stop.sh                # 종료 스크립트
+```
+
+#### 2. 산출물 배치
+
+```bash
+tar -xzf bmon-ops-frontend.tar.gz -C /app/bmon-ops/html
+```
+
+#### 3. Apache 설정 파일 생성
+
+```bash
+vi /app/bmon-ops/conf/httpd.conf
+```
+
+```apache
+# 독립 인스턴스 설정 (기존 Apache와 완전 분리)
+ServerRoot "/etc/httpd"
+PidFile /app/bmon-ops/httpd.pid
+Listen 19090
+
+LoadModule authz_host_module modules/mod_authz_host.so
+LoadModule log_config_module modules/mod_log_config.so
+LoadModule mime_module modules/mod_mime.so
+LoadModule dir_module modules/mod_dir.so
+LoadModule rewrite_module modules/mod_rewrite.so
+
+TypesConfig /etc/mime.types
+DirectoryIndex index.html
+
+ErrorLog /dev/null
+CustomLog /dev/null combined
+
+DocumentRoot "/app/bmon-ops/html"
+
+<Directory "/app/bmon-ops/html">
+    Options -Indexes +FollowSymLinks
+    AllowOverride All
+    Order allow,deny
+    Allow from all
+</Directory>
+
+# SPA 라우팅 지원
+RewriteEngine On
+RewriteBase /
+RewriteRule ^index\.html$ - [L]
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule . /index.html [L]
+```
+
+#### 4. 기동 스크립트 생성
+
+```bash
+vi /app/bmon-ops/start.sh
+```
+
+```sh
 #!/bin/sh
 
-DATE=`date +%Y%m%d%H%M%S`
+APP_NAME="bmon-ops"
+APP_HOME="/app/bmon-ops"
+APP_PORT="19090"
+CONF_HOME="$APP_HOME/conf"
+HTTPD_BIN="/usr/sbin/httpd"
 
-. ./env_GO.sh
-. ./env_PROMETHEUS.sh
-
-PID=`ps -ef | grep java | grep "=$SERVER_NAME " | awk '{print $2}'`
+PID=`ps -ef | grep httpd | grep "$CONF_HOME/httpd.conf" | grep -v grep | awk '{print $2}' | head -1`
 echo $PID
 
 if [ e$PID != "e" ]
 then
-    echo "JBoss SERVER - $SERVER_NAME is already RUNNING..."
+    echo "$APP_NAME is already RUNNING... (PID: $PID)"
     exit;
 fi
 
-UNAME=`id -u -n`
-if [ e$UNAME != "e$JBOSS_USER" ]
-then
-    echo "Use $JBOSS_USER account to start JBoss SERVER - $SERVER_NAME..."
-    exit;
-fi
-
-echo $JAVA_OPTS
-
-mv $LOG_HOME/nohup/$SERVER_NAME.out $LOG_HOME/nohup/$SERVER_NAME.out.$DATE
-mv $LOG_HOME/gclog/gc.log $LOG_HOME/gclog/gc.log.$DATE
-
-nohup $JBOSS_HOME/bin/standalone.sh -DSERVER=$SERVER_NAME -P=$DOMAIN_BASE/$SERVER_NAME/bin/env.properties -c $CONFIG_FILE >> $LOG_HOME/nohup/$SERVER_NAME.out &
+$HTTPD_BIN -f $CONF_HOME/httpd.conf -k start
 
 if [ e$1 = "enotail" ]
 then
-    echo "Starting... $SERVER_NAME"
+    echo "Starting... $APP_NAME"
     exit;
 fi
 
-#tail -f $LOG_HOME/server.log
+sleep 1
+echo "$APP_NAME started. (PORT: $APP_PORT)"
+```
+
+#### 5. 종료 스크립트 생성
+
+```bash
+vi /app/bmon-ops/stop.sh
+```
+
+```sh
+#!/bin/sh
+
+APP_NAME="bmon-ops"
+APP_HOME="/app/bmon-ops"
+CONF_HOME="$APP_HOME/conf"
+HTTPD_BIN="/usr/sbin/httpd"
+
+PID=`ps -ef | grep httpd | grep "$CONF_HOME/httpd.conf" | grep -v grep | awk '{print $2}' | head -1`
+
+if [ e$PID = "e" ]
+then
+    echo "$APP_NAME is not RUNNING..."
+    exit;
+fi
+
+echo "Stopping $APP_NAME... (PID: $PID)"
+
+$HTTPD_BIN -f $CONF_HOME/httpd.conf -k stop
+
+sleep 1
+
+PID=`ps -ef | grep httpd | grep "$CONF_HOME/httpd.conf" | grep -v grep | awk '{print $2}' | head -1`
+if [ e$PID = "e" ]
+then
+    echo "$APP_NAME stopped."
+else
+    echo "$APP_NAME stop failed. force kill... (PID: $PID)"
+    kill -9 $PID
+    echo "$APP_NAME killed."
+fi
+```
+
+#### 6. 실행 권한 부여
+
+```bash
+chmod +x /app/bmon-ops/start.sh
+chmod +x /app/bmon-ops/stop.sh
+```
+
+### 서비스 기동/종료
+
+```bash
+/app/bmon-ops/start.sh           # 기동
+/app/bmon-ops/start.sh notail    # 기동 (메시지 없이)
+/app/bmon-ops/stop.sh            # 종료
+```
+
+### 접속
+
+```
+http://서버IP:19090
+```
+
+### 테스트 계정 (Mock 모드)
+
+| 항목 | 값 |
+|------|-----|
+| 아이디 | `operator123` |
+| 비밀번호 | `1234` |
+
+### 재배포 방법
+
+1. 로컬에서 `npm run build` 실행
+2. `tar -czf bmon-ops-frontend.tar.gz -C out .` 압축
+3. 서버에서 `/app/bmon-ops/stop.sh` 종료
+4. `tar -xzf bmon-ops-frontend.tar.gz -C /app/bmon-ops/html` 산출물 교체
+5. `/app/bmon-ops/start.sh` 기동
