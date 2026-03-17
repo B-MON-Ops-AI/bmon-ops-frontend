@@ -255,3 +255,42 @@ npm run start
 | Kubernetes 배포 | 배포 가이드 참조 |
 | CI/CD (Jenkins) | 배포 가이드 참조 |
 | CI/CD (GitHub Actions) | 배포 가이드 참조 |
+
+
+#!/bin/sh
+
+DATE=`date +%Y%m%d%H%M%S`
+
+. ./env_GO.sh
+. ./env_PROMETHEUS.sh
+
+PID=`ps -ef | grep java | grep "=$SERVER_NAME " | awk '{print $2}'`
+echo $PID
+
+if [ e$PID != "e" ]
+then
+    echo "JBoss SERVER - $SERVER_NAME is already RUNNING..."
+    exit;
+fi
+
+UNAME=`id -u -n`
+if [ e$UNAME != "e$JBOSS_USER" ]
+then
+    echo "Use $JBOSS_USER account to start JBoss SERVER - $SERVER_NAME..."
+    exit;
+fi
+
+echo $JAVA_OPTS
+
+mv $LOG_HOME/nohup/$SERVER_NAME.out $LOG_HOME/nohup/$SERVER_NAME.out.$DATE
+mv $LOG_HOME/gclog/gc.log $LOG_HOME/gclog/gc.log.$DATE
+
+nohup $JBOSS_HOME/bin/standalone.sh -DSERVER=$SERVER_NAME -P=$DOMAIN_BASE/$SERVER_NAME/bin/env.properties -c $CONFIG_FILE >> $LOG_HOME/nohup/$SERVER_NAME.out &
+
+if [ e$1 = "enotail" ]
+then
+    echo "Starting... $SERVER_NAME"
+    exit;
+fi
+
+#tail -f $LOG_HOME/server.log
