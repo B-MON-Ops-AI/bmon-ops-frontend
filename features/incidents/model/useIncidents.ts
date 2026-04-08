@@ -8,7 +8,7 @@ import { incidentApi } from '@/features/incidents/api/incident.api';
 
 const POLLING = Number(process.env.NEXT_PUBLIC_POLLING_INTERVAL ?? 30_000);
 
-export function useIncidents(params?: { severity?: string; status?: string; page?: number }) {
+export function useIncidents(params?: { severity?: string; status?: string; from_date?: string; to_date?: string; page?: number }) {
   return useQuery({
     queryKey: ['incidents', params],
     queryFn: () => incidentApi.getIncidents(params),

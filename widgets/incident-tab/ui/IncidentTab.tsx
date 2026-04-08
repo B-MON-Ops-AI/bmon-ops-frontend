@@ -13,6 +13,7 @@ import Typography from '@mui/material/Typography';
 import CircularProgress from '@mui/material/CircularProgress';
 import Chip from '@mui/material/Chip';
 import Tooltip from '@mui/material/Tooltip';
+import TextField from '@mui/material/TextField';
 import { IncidentWallCard, IncidentDetailDrawer, useIncidents } from '@/features/incidents';
 import type { Incident, Severity } from '@/entities/incident';
 import dayjs from 'dayjs';
@@ -35,6 +36,26 @@ const RESOLVED_OPTIONS: { value: ResolvedFilter; label: string }[] = [
   { value: 'unresolved', label: '미해결' },
   { value: 'resolved',   label: '해결됨' },
 ];
+
+type DatePreset = 'today' | '3d' | '7d' | '30d' | 'custom';
+
+const DATE_PRESETS: { value: DatePreset; label: string }[] = [
+  { value: 'today', label: '오늘' },
+  { value: '3d',    label: '3일' },
+  { value: '7d',    label: '7일' },
+  { value: '30d',   label: '30일' },
+  { value: 'custom', label: '직접입력' },
+];
+
+function getDateRange(preset: DatePreset, customFrom?: string, customTo?: string) {
+  if (preset === 'custom') {
+    return { from_date: customFrom, to_date: customTo };
+  }
+  const to = dayjs().format('YYYY-MM-DD');
+  const daysMap: Record<string, number> = { today: 0, '3d': 2, '7d': 6, '30d': 29 };
+  const from = dayjs().subtract(daysMap[preset] ?? 0, 'day').format('YYYY-MM-DD');
+  return { from_date: from, to_date: to };
+}
 
 const SEVERITY_ORDER: Record<string, number> = { critical: 0, warning: 1, info: 2 };
 
@@ -244,15 +265,22 @@ export default function IncidentTab() {
   const [resolved, setResolved]     = useState<ResolvedFilter>('unresolved');
   const [sortOrder, setSortOrder]   = useState<SortOrder>('newest');
   const [selected, setSelected]     = useState<Incident | null>(null);
+  const [datePreset, setDatePreset] = useState<DatePreset>('today');
+  const [customFrom, setCustomFrom] = useState(dayjs().format('YYYY-MM-DD'));
+  const [customTo, setCustomTo]     = useState(dayjs().format('YYYY-MM-DD'));
 
   const statusParam =
     resolved === 'resolved' ? 'resolved' :
     resolved === 'unresolved' ? 'open' :
     undefined;
 
+  const dateRange = getDateRange(datePreset, customFrom, customTo);
+
   const { data, isLoading } = useIncidents({
     severity: severity === 'all' ? undefined : severity,
     status: statusParam,
+    from_date: dateRange.from_date,
+    to_date: dateRange.to_date,
   });
 
   const allIncidents = data?.incidents ?? [];
@@ -356,6 +384,80 @@ export default function IncidentTab() {
                 />
               ))}
             </Box>
+          </Box>
+
+          {/* 구분선 */}
+          <Box sx={{ borderTop: '1px solid rgba(255,255,255,0.06)' }} />
+
+          {/* 기간 행 */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+            <Typography
+              variant="caption"
+              color="text.disabled"
+              fontWeight={600}
+              sx={{ width: 52, flexShrink: 0, letterSpacing: '0.05em', textTransform: 'uppercase', fontSize: '0.65rem' }}
+            >
+              기간
+            </Typography>
+            <Box
+              sx={{
+                display: 'inline-flex',
+                borderRadius: '10px',
+                border: '1px solid rgba(255,255,255,0.1)',
+                backgroundColor: '#1F2937',
+                overflow: 'hidden',
+                p: '3px',
+                gap: '2px',
+              }}
+            >
+              {DATE_PRESETS.map((opt) => {
+                const selected = datePreset === opt.value;
+                return (
+                  <Box
+                    key={opt.value}
+                    onClick={() => setDatePreset(opt.value)}
+                    sx={{
+                      px: 1.75, py: 0.5,
+                      borderRadius: '7px',
+                      cursor: 'pointer',
+                      userSelect: 'none',
+                      backgroundColor: selected ? 'rgba(99,102,241,0.2)' : 'transparent',
+                      transition: 'all 0.15s ease',
+                      '&:hover': { backgroundColor: selected ? undefined : 'rgba(255,255,255,0.06)' },
+                    }}
+                  >
+                    <Typography
+                      variant="caption"
+                      fontWeight={selected ? 700 : 400}
+                      sx={{ lineHeight: 1, color: selected ? '#818CF8' : 'text.disabled', whiteSpace: 'nowrap' }}
+                    >
+                      {opt.label}
+                    </Typography>
+                  </Box>
+                );
+              })}
+            </Box>
+            {datePreset === 'custom' && (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <TextField
+                  type="date"
+                  size="small"
+                  value={customFrom}
+                  onChange={(e) => setCustomFrom(e.target.value)}
+                  sx={{ '& .MuiOutlinedInput-root': { backgroundColor: '#1F2937', fontSize: '0.75rem', height: 32 }, width: 140 }}
+                  inputProps={{ style: { padding: '4px 8px' } }}
+                />
+                <Typography variant="caption" color="text.disabled">~</Typography>
+                <TextField
+                  type="date"
+                  size="small"
+                  value={customTo}
+                  onChange={(e) => setCustomTo(e.target.value)}
+                  sx={{ '& .MuiOutlinedInput-root': { backgroundColor: '#1F2937', fontSize: '0.75rem', height: 32 }, width: 140 }}
+                  inputProps={{ style: { padding: '4px 8px' } }}
+                />
+              </Box>
+            )}
           </Box>
 
           {/* 구분선 */}

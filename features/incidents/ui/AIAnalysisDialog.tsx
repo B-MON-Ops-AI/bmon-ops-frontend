@@ -139,9 +139,10 @@ export default function AIAnalysisDialog({ incidentId, onClose }: Props) {
               <Typography variant="subtitle2" color="primary" mb={1}>유사 사례</Typography>
               {result.similarCases.map((sc, i) => (
                 <Box key={i} sx={{ mb: 1, p: 1.5, borderRadius: 1, backgroundColor: '#1F2937' }}>
-                  <Typography variant="caption" color="text.secondary">{sc.date}</Typography>
-                  <Typography variant="body2" mb={0.5}>{sc.description}</Typography>
-                  <Typography variant="caption" color="success.main">해결: {sc.resolution}</Typography>
+                  <Typography variant="caption" color="text.secondary">{sc.date} · {sc.serviceName}</Typography>
+                  <Typography variant="body2" mb={0.5}>{sc.alarmName} ({sc.thresholdValue.toLocaleString()}건)</Typography>
+                  {sc.resolution && <Typography variant="caption" color="success.main">해결: {sc.resolution}</Typography>}
+                  {sc.clearYn && !sc.resolution && <Typography variant="caption" color="success.main">자동 해소</Typography>}
                 </Box>
               ))}
             </Box>

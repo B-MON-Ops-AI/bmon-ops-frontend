@@ -22,18 +22,20 @@ import type { Incident } from '@/entities/incident';
 dayjs.extend(relativeTime);
 dayjs.locale('ko');
 
-const metricLabels: Record<string, string> = {
-  error_rate: '에러율',
-  response_time: '응답시간',
-  traffic: '트래픽',
-  request_count: '요청수',
+const detectTypeLabels: Record<string, string> = {
+  ERR_S: '시스템오류',
+  RPY_TIME: '응답시간',
+  ERR_RATE: '오류율',
+  ERR_E: '외부오류',
+  CALL_CASCNT: '호출건수',
 };
 
-const metricUnits: Record<string, string> = {
-  error_rate: '%',
-  response_time: 'ms',
-  traffic: 'req/s',
-  request_count: 'req',
+const detectTermLabels: Record<string, string> = {
+  MIN1: '1분',
+  MIN5: '5분',
+  MIN10: '10분',
+  HOUR1: '1시간',
+  DAY1: '1일',
 };
 
 /** 30분 이내 발생한 인시던트를 신규로 표시 */
@@ -113,28 +115,36 @@ export default function IncidentWallCard({ incident, onClick }: Props) {
             </Typography>
           </Box>
 
-          {/* 서비스명 */}
-          <Typography variant="subtitle2" fontWeight={700} mb={0.5} noWrap>
+          {/* 서비스명 + 알람명 */}
+          <Typography variant="subtitle2" fontWeight={700} mb={0.25} noWrap>
             {incident.serviceName}
           </Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }} noWrap>
+            {incident.alarmName}
+          </Typography>
 
-          {/* 메트릭 */}
+          {/* 감지값 */}
           <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.5, mb: 0.5 }}>
             <Typography variant="caption" color="text.secondary">
-              {metricLabels[incident.metricType]}
+              {detectTypeLabels[incident.detectType]} ({detectTermLabels[incident.detectTerm]})
             </Typography>
             <Typography variant="body1" fontWeight={700} color="error.main">
-              {incident.metricValue.toLocaleString()}
+              {incident.thresholdValue.toLocaleString()}
               <Typography component="span" variant="caption" color="error.light" sx={{ ml: 0.25 }}>
-                {metricUnits[incident.metricType]}
+                건
               </Typography>
             </Typography>
           </Box>
 
-          {/* 변화량 */}
-          <Typography variant="caption" color="text.disabled">
-            기준 {incident.baseline.toLocaleString()} · +{incident.changePercent}% 초과
-          </Typography>
+          {/* 임계값 대비 */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <Typography variant="caption" color="text.disabled">
+              임계 {incident.threshold.toLocaleString()}건
+            </Typography>
+            {incident.clearYn && (
+              <Chip label="해소" size="small" sx={{ height: 16, fontSize: '0.6rem', backgroundColor: '#10B98122', color: '#10B981', '& .MuiChip-label': { px: 0.5 } }} />
+            )}
+          </Box>
 
           {/* 클릭 힌트 */}
           <Typography

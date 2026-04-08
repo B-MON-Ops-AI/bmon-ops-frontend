@@ -12,6 +12,7 @@ export interface ChatMessage {
 
 export interface ChatQueryRequest {
   query: string;
+  alarm_hst_seq?: number;
 }
 
 export interface ChatQueryResponse {

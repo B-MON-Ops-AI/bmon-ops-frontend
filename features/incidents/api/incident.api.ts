@@ -10,6 +10,8 @@ export const incidentApi = {
   getIncidents: (params?: {
     severity?: string;
     status?: string;
+    from_date?: string;
+    to_date?: string;
     page?: number;
     size?: number;
   }) =>

@@ -86,12 +86,25 @@ function getMockData(
     if (method === 'get' && url === '/chat/history') return MOCK_CHAT_HISTORY;
     if (method === 'post' && url === '/chat/query') {
       const body = typeof config.data === 'string' ? JSON.parse(config.data) : config.data ?? {};
+      const q = (body.query ?? '').toLowerCase();
+      let summary = '';
+
+      if (q.includes('요금') || q.includes('bg008802')) {
+        summary = `**KOS-요금온라인(BG008802) 현황**\n\n| 메트릭 | 현재값 | 추이 |\n|--------|--------|------|\n| 트랜잭션 | 10,247 req/min | +3.2% ↑ |\n| 에러율 | 0.32% | +1.8% ↑ |\n| 응답시간 | 1,423ms | -2.1% ↓ |\n\n현재 alarm_id=46 관련 Critical 인시던트 1건 Open 상태입니다. 임계값(30건)이 실 트래픽 대비 과소 설정되어 있어 상향 조정을 권장합니다.`;
+      } else if (q.includes('무선') || q.includes('bg011701')) {
+        summary = `**KOS-무선오더(BG011701) 현황**\n\n분당 트랜잭션 10,841건, 에러율 0.05%로 정상 범위입니다.\n\n단, 현재 Critical 인시던트 2건 발생 중:\n- 모바일 신규개통 오류 (127건/5분, 임계 50건)\n- 해지 시스템 오류 (73건/5분, 임계 50건)\n\nNBSS_ORD 앱 서버 상태 확인이 필요합니다.`;
+      } else if (q.includes('critical') || q.includes('긴급') || q.includes('위험')) {
+        summary = `**현재 Critical 인시던트 4건:**\n1. KOS-요금온라인 — 시스템오류 329,415건 (Open)\n2. KOS-무선오더 — 신규개통 오류 127건 (Open)\n3. KOS-물류 — 대리점 조회 오류 85건 (ACK)\n4. KOS-무선오더 — 해지 오류 73건 (Open)\n\n가장 긴급한 항목은 inc-002(무선오더 신규개통)로, 3분 전 발생하여 아직 미대응 상태입니다.`;
+      } else if (q.includes('에러') || q.includes('오류')) {
+        summary = `**서비스별 에러율 현황:**\n\n| 서비스 | 에러율 | 상태 |\n|--------|--------|------|\n| KOS-B2C CRM | 3.42% | ⚠️ 상승 |\n| KOS-유선공통 | 2.19% | ⚠️ 상승 |\n| KOS-요금온라인 | 0.32% | 정상 |\n| KOS-물류 | 0.08% | 정상 |\n| KOS-무선오더 | 0.05% | 정상 |\n| KOS-통합고객 | 0.02% | 정상 |\n\nKOS-B2C CRM 에러율이 3.42%로 가장 높으며, NBSS_SMS 오류율 알람(임계 10%)도 발생 중입니다.`;
+      } else {
+        summary = `**"${body.query ?? ''}"**에 대한 분석입니다.\n\n현재 시스템 전체 현황:\n- 총 인시던트: 12건 (Critical 4, Warning 4, Info 4)\n- 미해결: 8건\n- 평균 응답시간: 정상 범위\n\n구체적인 서비스명이나 메트릭을 지정하시면 상세 분석을 제공합니다.\n\n예시: "KOS-요금온라인 트래픽 추이", "Critical 인시던트 현황", "에러율 높은 서비스"`;
+      }
+
       return {
         queryId: `q-${Date.now()}`,
         query: body.query ?? '',
-        answer: {
-          summary: `**[Mock 응답]** "${body.query ?? ''}"에 대한 답변입니다.\n\n현재 모의 데이터 모드로 동작 중입니다. 백엔드 연동 후 실제 AI 응답을 받을 수 있습니다.`,
-        },
+        answer: { summary },
         createdAt: new Date().toISOString(),
       };
     }
