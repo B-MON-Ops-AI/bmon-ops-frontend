@@ -16,33 +16,6 @@ import { restoreAuth } from '@/features/auth/model/authSlice';
 const PUBLIC_PATHS = ['/login'];
 
 export default function AuthGuard({ children }: { children: React.ReactNode }) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const dispatch = useAppDispatch();
-  const { token, isRestored } = useAppSelector((s) => s.auth);
-
-  useEffect(() => {
-    dispatch(restoreAuth());
-  }, [dispatch]);
-
-  useEffect(() => {
-    if (!isRestored) return;
-    const isPublic = PUBLIC_PATHS.some((p) => pathname.startsWith(p));
-    if (!token && !isPublic) {
-      router.replace('/login');
-    }
-  }, [isRestored, token, pathname, router]);
-
-  if (!isRestored) {
-    return (
-      <Box sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <CircularProgress />
-      </Box>
-    );
-  }
-
-  const isPublic = PUBLIC_PATHS.some((p) => pathname.startsWith(p));
-  if (!token && !isPublic) return null;
-
+  // TODO: 인증 구현 시 활성화
   return <>{children}</>;
 }
