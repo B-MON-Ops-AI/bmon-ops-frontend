@@ -4,7 +4,6 @@
  * @module app
  */
 import type { Metadata } from 'next';
-import Script from 'next/script';
 import '@/shared/styles/globals.css';
 import { AppThemeProvider } from '@/shared/theme';
 import { StoreProvider } from '@/shared/store';
@@ -20,7 +19,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="ko">
       <head>
-        <Script src="/runtime-env.js" strategy="beforeInteractive" />
+        {/* eslint-disable-next-line @next/next/no-sync-scripts */}
+        <script src="/runtime-env.js" />
       </head>
       <body>
         <StoreProvider>
