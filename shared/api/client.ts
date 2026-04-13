@@ -23,14 +23,14 @@ function createClient(baseURL: string, serviceName: string): AxiosInstance {
     headers: { 'Content-Type': 'application/json' },
   });
 
-  // 요청 인터셉터: JWT 자동 첨부
-  client.interceptors.request.use((config) => {
-    const token = getToken();
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  });
+  // 요청 인터셉터: JWT 자동 첨부 (인증 구현 시 활성화)
+  // client.interceptors.request.use((config) => {
+  //   const token = getToken();
+  //   if (token) {
+  //     config.headers.Authorization = `Bearer ${token}`;
+  //   }
+  //   return config;
+  // });
 
   // Mock 모드: 더미 데이터 인터셉터
   if (IS_MOCK) {
