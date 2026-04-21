@@ -316,7 +316,7 @@ export const MOCK_INCIDENTS = {
       threshold: 30,
       thresholdValue: 329415,
       changePercent: 1098050,
-      severity: 'critical' as const,
+      severity: 'fatal' as const,
       status: 'open' as const,
       clearYn: false,
       occurredAt: T(8),
@@ -400,7 +400,7 @@ export const MOCK_INCIDENTS = {
       threshold: 15,
       thresholdValue: 20,
       changePercent: 33,
-      severity: 'warning' as const,
+      severity: 'major' as const,
       status: 'open' as const,
       clearYn: false,
       occurredAt: T(12),
@@ -420,7 +420,7 @@ export const MOCK_INCIDENTS = {
       threshold: 10,
       thresholdValue: 15.3,
       changePercent: 53,
-      severity: 'warning' as const,
+      severity: 'major' as const,
       status: 'open' as const,
       clearYn: false,
       occurredAt: T(25),
@@ -440,7 +440,7 @@ export const MOCK_INCIDENTS = {
       threshold: 100,
       thresholdValue: 156,
       changePercent: 56,
-      severity: 'warning' as const,
+      severity: 'major' as const,
       status: 'acknowledged' as const,
       clearYn: false,
       occurredAt: T(40),
@@ -462,7 +462,7 @@ export const MOCK_INCIDENTS = {
       threshold: 800,
       thresholdValue: 952,
       changePercent: 19,
-      severity: 'warning' as const,
+      severity: 'major' as const,
       status: 'resolved' as const,
       clearYn: true,
       clearDt: T(55),
@@ -488,7 +488,7 @@ export const MOCK_INCIDENTS = {
       threshold: 3000,
       thresholdValue: 4521,
       changePercent: 50.7,
-      severity: 'info' as const,
+      severity: 'minor' as const,
       status: 'open' as const,
       clearYn: false,
       occurredAt: T(18),
@@ -508,7 +508,7 @@ export const MOCK_INCIDENTS = {
       threshold: 5,
       thresholdValue: 11,
       changePercent: 120,
-      severity: 'info' as const,
+      severity: 'minor' as const,
       status: 'muted' as const,
       clearYn: true,
       clearDt: T(50),
@@ -531,7 +531,7 @@ export const MOCK_INCIDENTS = {
       threshold: 30,
       thresholdValue: 40,
       changePercent: 33,
-      severity: 'info' as const,
+      severity: 'minor' as const,
       status: 'resolved' as const,
       clearYn: true,
       clearDt: T(100),
@@ -555,7 +555,7 @@ export const MOCK_INCIDENTS = {
       threshold: 30,
       thresholdValue: 48,
       changePercent: 60,
-      severity: 'warning' as const,
+      severity: 'major' as const,
       status: 'open' as const,
       clearYn: false,
       occurredAt: T(15),
@@ -859,3 +859,154 @@ export const MOCK_USERS = {
   totalPages: 2,
   currentPage: 0,
 };
+
+// ── Dashboard Summary ────────────────────────────────────────
+// mo_alarm_hst 집계 기반, days 파라미터별 분리
+
+const RECENT_CRITICAL = [
+    {
+      id: 'inc-002', alarmHstSeq: '12001',
+      serviceId: 'BG011701', serviceName: 'KOS-무선오더',
+      alarmName: 'KOS 모바일 신규개통 시스템오류',
+      severity: 'critical',
+      detectType: 'ERR_S', threshold: 50, thresholdValue: 127,
+      occurredAt: T(3),
+    },
+    {
+      id: 'inc-004', alarmHstSeq: '12015',
+      serviceId: 'BG011701', serviceName: 'KOS-무선오더',
+      alarmName: 'KOS 무선오더 해지 시스템 오류',
+      severity: 'critical',
+      detectType: 'ERR_S', threshold: 50, thresholdValue: 73,
+      occurredAt: T(5),
+    },
+    {
+      id: 'inc-001', alarmHstSeq: '11769',
+      serviceId: 'BG008802', serviceName: 'KOS-요금온라인',
+      alarmName: '요금온라인 전체 서비스 시스템오류 10분간 30건 이상 발생',
+      severity: 'fatal',
+      detectType: 'CALL_CASCNT', threshold: 30, thresholdValue: 329415,
+      occurredAt: T(8),
+    },
+    {
+      id: 'inc-003', alarmHstSeq: '8820',
+      serviceId: 'BG009001', serviceName: 'KOS-물류',
+      alarmName: '대리점 조회 오류',
+      severity: 'critical',
+      detectType: 'ERR_S', threshold: 30, thresholdValue: 85,
+      occurredAt: T(22),
+    },
+];
+
+export function getMockDashboardSummary(days: number) {
+  if (days === 1) {
+    return {
+      kpi: { totalIncidents: 7, activeIncidents: 5, criticalActive: 3, autoClearRate: 14.3 },
+      severityCounts: [
+        { severity: 'fatal',    count: 1 },
+        { severity: 'critical', count: 2 },
+        { severity: 'major',    count: 2 },
+        { severity: 'minor',    count: 2 },
+      ],
+      serviceRanking: [
+        { serviceId: 'BG011701', serviceName: 'KOS-무선오더',   count: 3 },
+        { serviceId: 'BG008802', serviceName: 'KOS-요금온라인', count: 2 },
+        { serviceId: 'BG009001', serviceName: 'KOS-물류',       count: 1 },
+        { serviceId: 'BG011706', serviceName: 'KOS-유선공통',   count: 1 },
+        { serviceId: 'BG009102', serviceName: 'KOS-B2C CRM',   count: 0 },
+      ],
+      detectTypeCounts: [
+        { type: 'ERR_S',       label: '시스템오류', count: 5 },
+        { type: 'CALL_CASCNT', label: '호출건수',   count: 1 },
+        { type: 'ERR_RATE',    label: '오류율',     count: 1 },
+        { type: 'RPY_TIME',    label: '응답시간',   count: 0 },
+        { type: 'ERR_E',       label: '외부오류',   count: 0 },
+      ],
+      dailyTrend: [
+        { date: '04-21', fatal: 1, critical: 2, major: 2, minor: 2 },
+      ],
+      recentCritical: RECENT_CRITICAL,
+    };
+  }
+
+  if (days === 30) {
+    return {
+      kpi: { totalIncidents: 48, activeIncidents: 8, criticalActive: 4, autoClearRate: 68.8 },
+      severityCounts: [
+        { severity: 'fatal',    count: 4 },
+        { severity: 'critical', count: 11 },
+        { severity: 'major',    count: 18 },
+        { severity: 'minor',    count: 15 },
+      ],
+      serviceRanking: [
+        { serviceId: 'BG008802', serviceName: 'KOS-요금온라인', count: 16 },
+        { serviceId: 'BG011701', serviceName: 'KOS-무선오더',   count: 12 },
+        { serviceId: 'BG011706', serviceName: 'KOS-유선공통',   count: 8 },
+        { serviceId: 'BG009001', serviceName: 'KOS-물류',       count: 7 },
+        { serviceId: 'BG009102', serviceName: 'KOS-B2C CRM',   count: 5 },
+      ],
+      detectTypeCounts: [
+        { type: 'ERR_S',       label: '시스템오류', count: 28 },
+        { type: 'CALL_CASCNT', label: '호출건수',   count: 9 },
+        { type: 'ERR_RATE',    label: '오류율',     count: 5 },
+        { type: 'RPY_TIME',    label: '응답시간',   count: 4 },
+        { type: 'ERR_E',       label: '외부오류',   count: 2 },
+      ],
+      dailyTrend: [
+        { date: '03-23', fatal: 0, critical: 0, major: 1, minor: 1 },
+        { date: '03-25', fatal: 0, critical: 1, major: 2, minor: 0 },
+        { date: '03-27', fatal: 0, critical: 0, major: 1, minor: 2 },
+        { date: '03-29', fatal: 1, critical: 1, major: 0, minor: 1 },
+        { date: '03-31', fatal: 0, critical: 2, major: 3, minor: 2 },
+        { date: '04-02', fatal: 0, critical: 0, major: 2, minor: 1 },
+        { date: '04-04', fatal: 1, critical: 1, major: 1, minor: 0 },
+        { date: '04-06', fatal: 0, critical: 1, major: 2, minor: 2 },
+        { date: '04-08', fatal: 0, critical: 0, major: 1, minor: 1 },
+        { date: '04-10', fatal: 0, critical: 1, major: 0, minor: 2 },
+        { date: '04-12', fatal: 1, critical: 0, major: 2, minor: 1 },
+        { date: '04-14', fatal: 0, critical: 1, major: 1, minor: 0 },
+        { date: '04-16', fatal: 0, critical: 0, major: 1, minor: 2 },
+        { date: '04-18', fatal: 0, critical: 1, major: 3, minor: 1 },
+        { date: '04-21', fatal: 1, critical: 3, major: 4, minor: 4 },
+      ],
+      recentCritical: RECENT_CRITICAL,
+    };
+  }
+
+  // days === 7 (default)
+  return {
+    kpi: { totalIncidents: 12, activeIncidents: 8, criticalActive: 4, autoClearRate: 25.0 },
+    severityCounts: [
+      { severity: 'fatal',    count: 1 },
+      { severity: 'critical', count: 3 },
+      { severity: 'major',    count: 4 },
+      { severity: 'minor',    count: 4 },
+    ],
+    serviceRanking: [
+      { serviceId: 'BG008802', serviceName: 'KOS-요금온라인', count: 4 },
+      { serviceId: 'BG011701', serviceName: 'KOS-무선오더',   count: 3 },
+      { serviceId: 'BG011706', serviceName: 'KOS-유선공통',   count: 2 },
+      { serviceId: 'BG009001', serviceName: 'KOS-물류',       count: 2 },
+      { serviceId: 'BG009102', serviceName: 'KOS-B2C CRM',   count: 1 },
+    ],
+    detectTypeCounts: [
+      { type: 'ERR_S',       label: '시스템오류', count: 7 },
+      { type: 'CALL_CASCNT', label: '호출건수',   count: 2 },
+      { type: 'ERR_RATE',    label: '오류율',     count: 1 },
+      { type: 'RPY_TIME',    label: '응답시간',   count: 1 },
+      { type: 'ERR_E',       label: '외부오류',   count: 1 },
+    ],
+    dailyTrend: [
+      { date: '04-15', fatal: 0, critical: 1, major: 2, minor: 0 },
+      { date: '04-16', fatal: 0, critical: 0, major: 1, minor: 2 },
+      { date: '04-17', fatal: 1, critical: 1, major: 0, minor: 1 },
+      { date: '04-18', fatal: 0, critical: 1, major: 3, minor: 1 },
+      { date: '04-19', fatal: 0, critical: 0, major: 1, minor: 2 },
+      { date: '04-20', fatal: 1, critical: 1, major: 2, minor: 1 },
+      { date: '04-21', fatal: 1, critical: 3, major: 4, minor: 4 },
+    ],
+    recentCritical: RECENT_CRITICAL,
+  };
+}
+
+export const MOCK_DASHBOARD_SUMMARY = getMockDashboardSummary(7);

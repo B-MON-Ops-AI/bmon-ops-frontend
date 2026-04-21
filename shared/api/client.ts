@@ -4,10 +4,8 @@
  * @module shared/api
  */
 import axios, { type AxiosInstance, type AxiosError } from 'axios';
-import { API_CONFIG } from '@/shared/api/config';
+import { API_CONFIG, isMockMode } from '@/shared/api/config';
 import { applyMockInterceptor } from '@/shared/api/mock/interceptor';
-
-const IS_MOCK = process.env.NEXT_PUBLIC_MOCK_MODE === 'true';
 
 function getToken(): string | null {
   if (typeof window !== 'undefined') {
@@ -32,8 +30,8 @@ function createClient(baseURL: string, serviceName: string): AxiosInstance {
   //   return config;
   // });
 
-  // Mock 모드: 더미 데이터 인터셉터
-  if (IS_MOCK) {
+  // Mock 모드: 더미 데이터 인터셉터 (runtime-env.js 또는 빌드시 env 기반)
+  if (isMockMode()) {
     applyMockInterceptor(client, serviceName);
   }
 

@@ -11,6 +11,7 @@ type RuntimeConfig = {
   AI_HOST: string;
   CHAT_HOST: string;
   SETTINGS_HOST: string;
+  MOCK_MODE?: boolean;
 };
 
 declare global {
@@ -32,6 +33,13 @@ function getConfig(): RuntimeConfig {
     CHAT_HOST: process.env.NEXT_PUBLIC_CHAT_API_URL ?? 'http://localhost:8085',
     SETTINGS_HOST: process.env.NEXT_PUBLIC_SETTINGS_API_URL ?? 'http://localhost:8086',
   };
+}
+
+export function isMockMode(): boolean {
+  if (typeof window !== 'undefined' && window.__runtime_config__?.MOCK_MODE !== undefined) {
+    return window.__runtime_config__.MOCK_MODE === true;
+  }
+  return process.env.NEXT_PUBLIC_MOCK_MODE === 'true';
 }
 
 export const API_CONFIG = {

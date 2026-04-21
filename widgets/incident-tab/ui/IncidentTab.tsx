@@ -6,7 +6,7 @@
  * @module widgets/incident-tab/ui
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import Box from '@mui/material/Box';
 import Grid from '@mui/material/Grid';
 import Typography from '@mui/material/Typography';
@@ -14,6 +14,11 @@ import CircularProgress from '@mui/material/CircularProgress';
 import Chip from '@mui/material/Chip';
 import Tooltip from '@mui/material/Tooltip';
 import TextField from '@mui/material/TextField';
+import InputAdornment from '@mui/material/InputAdornment';
+import SearchIcon from '@mui/icons-material/Search';
+import ClearIcon from '@mui/icons-material/Clear';
+import IconButton from '@mui/material/IconButton';
+import LayersIcon from '@mui/icons-material/Layers';
 import { IncidentWallCard, IncidentDetailDrawer, useIncidents } from '@/features/incidents';
 import type { Incident, Severity } from '@/entities/incident';
 import dayjs from 'dayjs';
@@ -26,9 +31,10 @@ type SortOrder = 'newest' | 'severity';
 
 const SEVERITY_OPTIONS: { value: SeverityFilter; label: string; color: string | null }[] = [
   { value: 'all',      label: '전체',     color: null },
+  { value: 'fatal',    label: 'Fatal',    color: '#7C1515' },
   { value: 'critical', label: 'Critical', color: '#DC2626' },
-  { value: 'warning',  label: 'Major',    color: '#F59E0B' },
-  { value: 'info',     label: 'Minor',    color: '#3B82F6' },
+  { value: 'major',    label: 'Major',    color: '#F59E0B' },
+  { value: 'minor',    label: 'Minor',    color: '#3B82F6' },
 ];
 
 const RESOLVED_OPTIONS: { value: ResolvedFilter; label: string }[] = [
@@ -37,9 +43,9 @@ const RESOLVED_OPTIONS: { value: ResolvedFilter; label: string }[] = [
   { value: 'resolved',   label: '해결됨' },
 ];
 
-type DatePreset = 'today' | '3d' | '7d' | '30d' | 'custom';
+export type DatePreset = 'today' | '3d' | '7d' | '30d' | 'custom';
 
-const DATE_PRESETS: { value: DatePreset; label: string }[] = [
+export const DATE_PRESETS: { value: DatePreset; label: string }[] = [
   { value: 'today', label: '오늘' },
   { value: '3d',    label: '3일' },
   { value: '7d',    label: '7일' },
@@ -47,7 +53,7 @@ const DATE_PRESETS: { value: DatePreset; label: string }[] = [
   { value: 'custom', label: '직접입력' },
 ];
 
-function getDateRange(preset: DatePreset, customFrom?: string, customTo?: string) {
+export function getDateRange(preset: DatePreset, customFrom?: string, customTo?: string) {
   if (preset === 'custom') {
     return { from_date: customFrom, to_date: customTo };
   }
@@ -57,7 +63,16 @@ function getDateRange(preset: DatePreset, customFrom?: string, customTo?: string
   return { from_date: from, to_date: to };
 }
 
-const SEVERITY_ORDER: Record<string, number> = { critical: 0, warning: 1, info: 2 };
+export interface IncidentTabDateProps {
+  datePreset: DatePreset;
+  customFrom: string;
+  customTo: string;
+  onDatePresetChange: (preset: DatePreset) => void;
+  onCustomFromChange: (from: string) => void;
+  onCustomToChange: (to: string) => void;
+}
+
+const SEVERITY_ORDER: Record<string, number> = { fatal: 0, critical: 1, major: 2, minor: 3 };
 
 /** 30분 이내 발생한 인시던트를 신규로 표시 */
 const NEW_THRESHOLD_MINUTES = 30;
@@ -260,14 +275,27 @@ function SortSegment({
 
 // ── 메인 컴포넌트 ──────────────────────────────────────
 
-export default function IncidentTab() {
-  const [severity, setSeverity] = useState<SeverityFilter>('all');
-  const [resolved, setResolved]     = useState<ResolvedFilter>('unresolved');
-  const [sortOrder, setSortOrder]   = useState<SortOrder>('newest');
-  const [selected, setSelected]     = useState<Incident | null>(null);
-  const [datePreset, setDatePreset] = useState<DatePreset>('today');
-  const [customFrom, setCustomFrom] = useState(dayjs().format('YYYY-MM-DD'));
-  const [customTo, setCustomTo]     = useState(dayjs().format('YYYY-MM-DD'));
+export default function IncidentTab({
+  datePreset,
+  customFrom,
+  customTo,
+  onDatePresetChange,
+  onCustomFromChange,
+  onCustomToChange,
+}: IncidentTabDateProps) {
+  const [severity, setSeverity]       = useState<SeverityFilter>('all');
+  const [resolved, setResolved]       = useState<ResolvedFilter>('unresolved');
+  const [sortOrder, setSortOrder]     = useState<SortOrder>('newest');
+  const [selected, setSelected]       = useState<Incident | null>(null);
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch]           = useState('');
+  const [groupByService, setGroupByService] = useState(false);
+
+  // 400ms 디바운스: 타이핑 중에는 API 호출 안 함
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchInput), 400);
+    return () => clearTimeout(t);
+  }, [searchInput]);
 
   const statusParam =
     resolved === 'resolved' ? 'resolved' :
@@ -281,6 +309,7 @@ export default function IncidentTab() {
     status: statusParam,
     from_date: dateRange.from_date,
     to_date: dateRange.to_date,
+    search: search || undefined,
   });
 
   const allIncidents = data?.incidents ?? [];
@@ -312,13 +341,29 @@ export default function IncidentTab() {
 
   // 심각도별 건수 집계
   const severityCounts: Record<string, number> = {
+    fatal:    allIncidents.filter((i) => i.severity === 'fatal').length,
     critical: allIncidents.filter((i) => i.severity === 'critical').length,
-    warning:  allIncidents.filter((i) => i.severity === 'warning').length,
-    info:     allIncidents.filter((i) => i.severity === 'info').length,
+    major:    allIncidents.filter((i) => i.severity === 'major').length,
+    minor:    allIncidents.filter((i) => i.severity === 'minor').length,
   };
 
-  const criticalIncidents = incidents.filter((i) => i.severity === 'critical');
-  const otherIncidents    = incidents.filter((i) => i.severity !== 'critical');
+  const criticalIncidents = incidents.filter((i) => i.severity === 'fatal' || i.severity === 'critical');
+  const otherIncidents    = incidents.filter((i) => i.severity !== 'fatal' && i.severity !== 'critical');
+
+  // 단위서비스별 그룹핑 (건수 내림차순)
+  const serviceGroups = useMemo(() => {
+    if (!groupByService) return null;
+    const map = new Map<string, { serviceName: string; incidents: Incident[] }>();
+    for (const i of incidents) {
+      if (!map.has(i.serviceId)) {
+        map.set(i.serviceId, { serviceName: i.serviceName, incidents: [] });
+      }
+      map.get(i.serviceId)!.incidents.push(i);
+    }
+    return Array.from(map.entries()).sort(
+      (a, b) => b[1].incidents.length - a[1].incidents.length
+    );
+  }, [incidents, groupByService]);
 
   return (
     <>
@@ -363,7 +408,107 @@ export default function IncidentTab() {
             gap: 1.75,
           }}
         >
-          {/* 심각도 행 */}
+          {/* 심각도 + 기간 한 줄 */}
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
+            {/* 심각도 — 왼쪽 */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Typography
+                variant="caption"
+                color="text.disabled"
+                fontWeight={600}
+                sx={{ flexShrink: 0, letterSpacing: '0.05em', textTransform: 'uppercase', fontSize: '0.65rem' }}
+              >
+                심각도
+              </Typography>
+              <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap' }}>
+                {SEVERITY_OPTIONS.map((opt) => (
+                  <SeverityFilterChip
+                    key={opt.value}
+                    option={opt}
+                    selected={severity === opt.value}
+                    count={opt.value !== 'all' ? (severityCounts[opt.value] ?? 0) : 0}
+                    onClick={() => setSeverity(opt.value)}
+                  />
+                ))}
+              </Box>
+            </Box>
+
+            {/* 기간 — 오른쪽 */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+              <Typography
+                variant="caption"
+                color="text.disabled"
+                fontWeight={600}
+                sx={{ flexShrink: 0, letterSpacing: '0.05em', textTransform: 'uppercase', fontSize: '0.65rem' }}
+              >
+                기간
+              </Typography>
+              <Box
+                sx={{
+                  display: 'inline-flex',
+                  borderRadius: '10px',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  backgroundColor: '#1F2937',
+                  overflow: 'hidden',
+                  p: '3px',
+                  gap: '2px',
+                }}
+              >
+                {DATE_PRESETS.map((opt) => {
+                  const sel = datePreset === opt.value;
+                  return (
+                    <Box
+                      key={opt.value}
+                      onClick={() => onDatePresetChange(opt.value)}
+                      sx={{
+                        px: 1.75, py: 0.5,
+                        borderRadius: '7px',
+                        cursor: 'pointer',
+                        userSelect: 'none',
+                        backgroundColor: sel ? 'rgba(99,102,241,0.2)' : 'transparent',
+                        transition: 'all 0.15s ease',
+                        '&:hover': { backgroundColor: sel ? undefined : 'rgba(255,255,255,0.06)' },
+                      }}
+                    >
+                      <Typography
+                        variant="caption"
+                        fontWeight={sel ? 700 : 400}
+                        sx={{ lineHeight: 1, color: sel ? '#818CF8' : 'text.disabled', whiteSpace: 'nowrap' }}
+                      >
+                        {opt.label}
+                      </Typography>
+                    </Box>
+                  );
+                })}
+              </Box>
+              {datePreset === 'custom' && (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <TextField
+                    type="date"
+                    size="small"
+                    value={customFrom}
+                    onChange={(e) => onCustomFromChange(e.target.value)}
+                    sx={{ '& .MuiOutlinedInput-root': { backgroundColor: '#1F2937', fontSize: '0.75rem', height: 32 }, width: 140 }}
+                    inputProps={{ style: { padding: '4px 8px' } }}
+                  />
+                  <Typography variant="caption" color="text.disabled">~</Typography>
+                  <TextField
+                    type="date"
+                    size="small"
+                    value={customTo}
+                    onChange={(e) => onCustomToChange(e.target.value)}
+                    sx={{ '& .MuiOutlinedInput-root': { backgroundColor: '#1F2937', fontSize: '0.75rem', height: 32 }, width: 140 }}
+                    inputProps={{ style: { padding: '4px 8px' } }}
+                  />
+                </Box>
+              )}
+            </Box>
+          </Box>
+
+          {/* 구분선 */}
+          <Box sx={{ borderTop: '1px solid rgba(255,255,255,0.06)' }} />
+
+          {/* 검색 행 */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             <Typography
               variant="caption"
@@ -371,99 +516,55 @@ export default function IncidentTab() {
               fontWeight={600}
               sx={{ width: 52, flexShrink: 0, letterSpacing: '0.05em', textTransform: 'uppercase', fontSize: '0.65rem' }}
             >
-              심각도
+              검색
             </Typography>
-            <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap' }}>
-              {SEVERITY_OPTIONS.map((opt) => (
-                <SeverityFilterChip
-                  key={opt.value}
-                  option={opt}
-                  selected={severity === opt.value}
-                  count={opt.value !== 'all' ? (severityCounts[opt.value] ?? 0) : 0}
-                  onClick={() => setSeverity(opt.value)}
-                />
-              ))}
-            </Box>
-          </Box>
-
-          {/* 구분선 */}
-          <Box sx={{ borderTop: '1px solid rgba(255,255,255,0.06)' }} />
-
-          {/* 기간 행 */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
-            <Typography
-              variant="caption"
-              color="text.disabled"
-              fontWeight={600}
-              sx={{ width: 52, flexShrink: 0, letterSpacing: '0.05em', textTransform: 'uppercase', fontSize: '0.65rem' }}
-            >
-              기간
-            </Typography>
-            <Box
+            <TextField
+              size="small"
+              placeholder="알람명 또는 서비스명 검색..."
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
               sx={{
-                display: 'inline-flex',
-                borderRadius: '10px',
-                border: '1px solid rgba(255,255,255,0.1)',
-                backgroundColor: '#1F2937',
-                overflow: 'hidden',
-                p: '3px',
-                gap: '2px',
+                flex: 1,
+                maxWidth: 400,
+                '& .MuiOutlinedInput-root': {
+                  backgroundColor: '#1F2937',
+                  fontSize: '0.8rem',
+                  height: 34,
+                  '& fieldset': { borderColor: 'rgba(255,255,255,0.1)' },
+                  '&:hover fieldset': { borderColor: 'rgba(255,255,255,0.25)' },
+                  '&.Mui-focused fieldset': { borderColor: '#6366F1' },
+                },
               }}
-            >
-              {DATE_PRESETS.map((opt) => {
-                const selected = datePreset === opt.value;
-                return (
-                  <Box
-                    key={opt.value}
-                    onClick={() => setDatePreset(opt.value)}
-                    sx={{
-                      px: 1.75, py: 0.5,
-                      borderRadius: '7px',
-                      cursor: 'pointer',
-                      userSelect: 'none',
-                      backgroundColor: selected ? 'rgba(99,102,241,0.2)' : 'transparent',
-                      transition: 'all 0.15s ease',
-                      '&:hover': { backgroundColor: selected ? undefined : 'rgba(255,255,255,0.06)' },
-                    }}
-                  >
-                    <Typography
-                      variant="caption"
-                      fontWeight={selected ? 700 : 400}
-                      sx={{ lineHeight: 1, color: selected ? '#818CF8' : 'text.disabled', whiteSpace: 'nowrap' }}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon sx={{ fontSize: 16, color: 'text.disabled' }} />
+                  </InputAdornment>
+                ),
+                endAdornment: searchInput ? (
+                  <InputAdornment position="end">
+                    <IconButton
+                      size="small"
+                      onClick={() => { setSearchInput(''); setSearch(''); }}
+                      sx={{ p: 0.25 }}
                     >
-                      {opt.label}
-                    </Typography>
-                  </Box>
-                );
-              })}
-            </Box>
-            {datePreset === 'custom' && (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <TextField
-                  type="date"
-                  size="small"
-                  value={customFrom}
-                  onChange={(e) => setCustomFrom(e.target.value)}
-                  sx={{ '& .MuiOutlinedInput-root': { backgroundColor: '#1F2937', fontSize: '0.75rem', height: 32 }, width: 140 }}
-                  inputProps={{ style: { padding: '4px 8px' } }}
-                />
-                <Typography variant="caption" color="text.disabled">~</Typography>
-                <TextField
-                  type="date"
-                  size="small"
-                  value={customTo}
-                  onChange={(e) => setCustomTo(e.target.value)}
-                  sx={{ '& .MuiOutlinedInput-root': { backgroundColor: '#1F2937', fontSize: '0.75rem', height: 32 }, width: 140 }}
-                  inputProps={{ style: { padding: '4px 8px' } }}
-                />
-              </Box>
+                      <ClearIcon sx={{ fontSize: 14, color: 'text.disabled' }} />
+                    </IconButton>
+                  </InputAdornment>
+                ) : null,
+              }}
+            />
+            {search && (
+              <Typography variant="caption" color="primary.light" sx={{ fontSize: '0.7rem', whiteSpace: 'nowrap' }}>
+                &quot;{search}&quot; 검색 중
+              </Typography>
             )}
           </Box>
 
           {/* 구분선 */}
           <Box sx={{ borderTop: '1px solid rgba(255,255,255,0.06)' }} />
 
-          {/* 해결여부 + 정렬 행 */}
+          {/* 해결여부 + 정렬 + 그룹핑 행 */}
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               <Typography
@@ -477,7 +578,38 @@ export default function IncidentTab() {
               <ResolvedSegment value={resolved} onChange={setResolved} />
             </Box>
 
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+              {/* 단위서비스 그룹핑 토글 */}
+              <Tooltip title={groupByService ? '서비스별 그룹 해제' : '단위서비스별 그룹핑'}>
+                <Box
+                  onClick={() => setGroupByService((v) => !v)}
+                  sx={{
+                    display: 'inline-flex', alignItems: 'center', gap: 0.75,
+                    px: 1.5, py: 0.625,
+                    borderRadius: '10px',
+                    cursor: 'pointer',
+                    userSelect: 'none',
+                    border: '1px solid',
+                    borderColor: groupByService ? '#6366F1' : 'rgba(255,255,255,0.1)',
+                    backgroundColor: groupByService ? 'rgba(99,102,241,0.15)' : 'transparent',
+                    transition: 'all 0.15s ease',
+                    '&:hover': {
+                      borderColor: '#6366F1',
+                      backgroundColor: 'rgba(99,102,241,0.08)',
+                    },
+                  }}
+                >
+                  <LayersIcon sx={{ fontSize: 14, color: groupByService ? '#818CF8' : 'text.disabled' }} />
+                  <Typography
+                    variant="caption"
+                    fontWeight={groupByService ? 700 : 400}
+                    sx={{ lineHeight: 1, color: groupByService ? '#818CF8' : 'text.disabled', whiteSpace: 'nowrap' }}
+                  >
+                    서비스별
+                  </Typography>
+                </Box>
+              </Tooltip>
+
               <Tooltip title="인시던트 정렬 기준">
                 <Box>
                   <SortSegment value={sortOrder} onChange={setSortOrder} />
@@ -500,6 +632,49 @@ export default function IncidentTab() {
         ) : incidents.length === 0 ? (
           <Box sx={{ textAlign: 'center', py: 10 }}>
             <Typography color="text.secondary">조건에 맞는 인시던트가 없습니다.</Typography>
+          </Box>
+        ) : serviceGroups ? (
+          // ── 단위서비스별 그룹핑 뷰 ──────────────────────
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            {serviceGroups.map(([serviceId, { serviceName, incidents: svcIncidents }]) => {
+              const hasCritical = svcIncidents.some((i) => i.severity === 'fatal' || i.severity === 'critical');
+              return (
+                <Box key={serviceId}>
+                  <Box
+                    sx={{
+                      display: 'flex', alignItems: 'center', gap: 1.5, mb: 1.5,
+                      pb: 1, borderBottom: '1px solid rgba(255,255,255,0.06)',
+                    }}
+                  >
+                    {hasCritical && (
+                      <Box sx={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: '#DC2626', boxShadow: '0 0 6px #DC2626', flexShrink: 0 }} />
+                    )}
+                    <Typography variant="subtitle2" fontWeight={700} color={hasCritical ? 'error.light' : 'text.primary'}>
+                      ({serviceId}) {serviceName}
+                    </Typography>
+                    <Chip
+                      label={`${svcIncidents.length}건`}
+                      size="small"
+                      sx={{
+                        height: 18, fontSize: '0.65rem', fontWeight: 700,
+                        backgroundColor: hasCritical ? '#DC262622' : 'rgba(255,255,255,0.08)',
+                        color: hasCritical ? '#EF4444' : 'text.secondary',
+                        border: '1px solid',
+                        borderColor: hasCritical ? '#DC262644' : 'rgba(255,255,255,0.12)',
+                        '& .MuiChip-label': { px: 0.75 },
+                      }}
+                    />
+                  </Box>
+                  <Grid container spacing={2}>
+                    {svcIncidents.map((incident) => (
+                      <Grid key={incident.id} item xs={12} sm={6} md={4} lg={3}>
+                        <IncidentWallCard incident={incident} onClick={setSelected} />
+                      </Grid>
+                    ))}
+                  </Grid>
+                </Box>
+              );
+            })}
           </Box>
         ) : sortOrder === 'severity' ? (
           // 위험도순 정렬: Critical 그룹 강조 표시

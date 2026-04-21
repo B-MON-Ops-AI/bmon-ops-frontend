@@ -10,9 +10,10 @@ import Chip from '@mui/material/Chip';
 import type { Severity } from '@/entities/incident';
 
 const severityConfig: Record<Severity, { label: string; color: string }> = {
+  fatal:    { label: 'Fatal',    color: '#7C1515' },
   critical: { label: 'Critical', color: '#DC2626' },
-  warning: { label: 'Warning', color: '#F59E0B' },
-  info: { label: 'Info', color: '#3B82F6' },
+  major:    { label: 'Major',    color: '#F59E0B' },
+  minor:    { label: 'Minor',    color: '#3B82F6' },
 };
 
 interface Props {

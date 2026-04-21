@@ -9,6 +9,14 @@ import type { WidgetOrderItem } from '@/entities/dashboard';
 
 const POLLING = Number(process.env.NEXT_PUBLIC_POLLING_INTERVAL ?? 30_000);
 
+export function useSummary(days = 7) {
+  return useQuery({
+    queryKey: ['dashboard-summary', days],
+    queryFn: () => dashboardApi.getSummary(days),
+    refetchInterval: POLLING,
+  });
+}
+
 export function useWidgets() {
   return useQuery({
     queryKey: ['widgets'],

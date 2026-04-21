@@ -4,7 +4,7 @@
  * @module entities/incident
  */
 export type IncidentStatus = 'open' | 'acknowledged' | 'resolved' | 'muted';
-export type Severity = 'critical' | 'warning' | 'info';
+export type Severity = 'fatal' | 'critical' | 'major' | 'minor';
 export type MetricType = 'error_rate' | 'response_time' | 'traffic' | 'request_count';
 export type DetectType = 'ERR_S' | 'RPY_TIME' | 'ERR_RATE' | 'ERR_E' | 'CALL_CASCNT';
 export type DetectTerm = 'MIN1' | 'MIN5' | 'MIN10' | 'HOUR1' | 'DAY1';
@@ -15,6 +15,11 @@ export interface Incident {
   alarmHstSeq: string;
   serviceId: string;
   serviceName: string;
+  applNm?: string;
+  chId?: string;
+  logPoint?: string;
+  svcNm?: string;
+  opNm?: string;
   alarmName: string;
   alarmDesc: string;
   alarmContent: string;

@@ -12,6 +12,8 @@ export const incidentApi = {
     status?: string;
     from_date?: string;
     to_date?: string;
+    search?: string;
+    service_id?: string;
     page?: number;
     size?: number;
   }) =>

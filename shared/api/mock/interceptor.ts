@@ -7,7 +7,7 @@ import type { AxiosInstance, InternalAxiosRequestConfig } from 'axios';
 import {
   MOCK_WIDGETS, MOCK_METRICS, MOCK_INCIDENTS, MOCK_CRITICAL_CHECK,
   MOCK_AI_ANALYSIS, MOCK_CHAT_HISTORY, MOCK_THRESHOLDS,
-  MOCK_NOTIFICATIONS, MOCK_USERS,
+  MOCK_NOTIFICATIONS, MOCK_USERS, getMockDashboardSummary,
 } from '@/shared/api/mock/data';
 
 function delay(ms = 250) {
@@ -26,6 +26,8 @@ function getMockData(
 ): unknown {
   // ── Dashboard ────────────────────────────────────────────
   if (serviceName === 'dashboard') {
+    if (method === 'get' && url === '/dashboard/summary')
+      return getMockDashboardSummary(Number(config.params?.days ?? 7));
     if (method === 'get' && url === '/dashboard/widgets') return MOCK_WIDGETS;
 
     if (method === 'get' && url.startsWith('/dashboard/metrics/')) {
@@ -51,16 +53,20 @@ function getMockData(
   // ── Incidents ────────────────────────────────────────────
   if (serviceName === 'incident') {
     if (method === 'get' && url === '/incidents') {
-      const { severity, status } = config.params ?? {};
-      return {
-        ...MOCK_INCIDENTS,
-        incidents: MOCK_INCIDENTS.incidents.filter((i) =>
-          (!severity || i.severity === severity) &&
-          (!status || i.status === status)
-        ),
-      };
+      const { severity, status, search, service_id } = config.params ?? {};
+      const keyword = (search ?? '').toLowerCase().trim();
+      const filtered = MOCK_INCIDENTS.incidents.filter((i) =>
+        (!severity || i.severity === severity) &&
+        (!status   || i.status   === status) &&
+        (!service_id || i.serviceId === service_id) &&
+        (!keyword  || i.alarmName.toLowerCase().includes(keyword) || i.serviceName.toLowerCase().includes(keyword))
+      );
+      return { ...MOCK_INCIDENTS, incidents: filtered, totalElements: filtered.length };
     }
     if (method === 'get' && url === '/incidents/critical/latest') return MOCK_CRITICAL_CHECK;
+    if (method === 'patch' && url.endsWith('/ack'))     return { success: true };
+    if (method === 'patch' && url.endsWith('/mute'))    return { success: true };
+    if (method === 'patch' && url.endsWith('/resolve')) return { success: true };
     if (method === 'post') return {};
   }
 

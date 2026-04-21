@@ -7,6 +7,9 @@ import { dashboardClient } from '@/shared/api';
 import type { WidgetListResponse, MetricData, Widget, WidgetOrderItem } from '@/entities/dashboard';
 
 export const dashboardApi = {
+  getSummary: (days = 7) =>
+    dashboardClient().get(`/dashboard/summary`, { params: { days } }).then((r) => r.data),
+
   getWidgets: () =>
     dashboardClient().get<WidgetListResponse>('/dashboard/widgets').then((r) => r.data),
 

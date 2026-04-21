@@ -205,7 +205,7 @@ export default function IncidentDetailDrawer({ incident, onClose }: Props) {
   if (!incident) return null;
 
   const isOpen = incident.status === 'open';
-  const isCritical = incident.severity === 'critical';
+  const isCritical = incident.severity === 'fatal' || incident.severity === 'critical';
   const result = analysis?.status === 'completed' ? analysis.result : null;
 
   const handleAck = () =>
