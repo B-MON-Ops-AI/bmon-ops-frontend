@@ -104,13 +104,13 @@ export default function ChatPanel() {
       onClose={() => dispatch(closeChatPanel())}
       variant="persistent"
       sx={{
-        width: isOpen ? DRAWER_WIDTH : 0,
         flexShrink: 0,
+        width: isOpen ? DRAWER_WIDTH : 0,
         '& .MuiDrawer-paper': {
           width: DRAWER_WIDTH,
           boxSizing: 'border-box',
-          top: 64,
-          height: 'calc(100% - 64px)',
+          top: 0,
+          height: '100%',
           backgroundColor: '#1F2937',
           borderLeft: '1px solid rgba(255,255,255,0.08)',
         },

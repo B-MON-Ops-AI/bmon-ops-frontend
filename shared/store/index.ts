@@ -7,4 +7,4 @@ export { store } from './store';
 export type { RootState, AppDispatch } from './store';
 export { default as StoreProvider } from './StoreProvider';
 export { useAppDispatch, useAppSelector } from './hooks';
-export { toggleChatPanel, openChatPanel, closeChatPanel, openAIAnalysis, closeAIAnalysis, showSnackbar, hideSnackbar } from './slices/uiSlice';
+export { toggleChatPanel, openChatPanel, closeChatPanel, openAIAnalysis, closeAIAnalysis, showSnackbar, hideSnackbar, setDashboardTab } from './slices/uiSlice';

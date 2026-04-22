@@ -8,6 +8,7 @@ import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 interface UIState {
   chatPanelOpen: boolean;
   aiAnalysisIncidentId: string | null;
+  dashboardTab: number; // 0=개요, 1=인시던트 Wall, 2=커스텀 Wall
   snackbar: {
     open: boolean;
     message: string;
@@ -18,6 +19,7 @@ interface UIState {
 const initialState: UIState = {
   chatPanelOpen: false,
   aiAnalysisIncidentId: null,
+  dashboardTab: 0,
   snackbar: {
     open: false,
     message: '',
@@ -57,6 +59,9 @@ const uiSlice = createSlice({
     hideSnackbar(state) {
       state.snackbar.open = false;
     },
+    setDashboardTab(state, action: PayloadAction<number>) {
+      state.dashboardTab = action.payload;
+    },
   },
 });
 
@@ -68,6 +73,7 @@ export const {
   closeAIAnalysis,
   showSnackbar,
   hideSnackbar,
+  setDashboardTab,
 } = uiSlice.actions;
 
 export default uiSlice.reducer;

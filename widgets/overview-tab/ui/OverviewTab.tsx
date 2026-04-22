@@ -19,7 +19,7 @@ import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
-import { useSummary } from '@/features/dashboard';
+import { useSummary, useHourlyTrend } from '@/features/dashboard';
 
 dayjs.extend(relativeTime);
 dayjs.locale('ko');
@@ -180,6 +180,8 @@ function DarkTooltip({ active, payload, label }: { active?: boolean; payload?: {
 export default function OverviewTab() {
   const [days, setDays] = useState(7);
   const { data, isLoading } = useSummary(days);
+  const isToday = days === 1;
+  const { data: hourlyData, isLoading: isHourlyLoading } = useHourlyTrend();
 
   if (isLoading) {
     return (
@@ -375,49 +377,103 @@ export default function OverviewTab() {
       {/* ── 차트 Row 2: 추이 + 최근 Fatal·Critical 목록 ── */}
       <Grid container spacing={2} alignItems="stretch">
 
-        {/* 일별 인시던트 추이 — Area */}
+        {/* 인시던트 추이 — 오늘: 시간대별 / 그 외: 일별 */}
         <Grid item xs={12} md={8} sx={{ display: 'flex', flexDirection: 'column' }}>
           <Card sx={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
-            <CardTitle>일별 인시던트 추이</CardTitle>
+            <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+              <CardTitle>{isToday ? '시간대별 인시던트 추이' : '일별 인시던트 추이'}</CardTitle>
+              {isToday && (
+                <Typography variant="caption" sx={{ color: C.muted, fontSize: '0.62rem', mb: 2 }}>
+                  00시 ~ {dayjs().format('HH')}시 · {dayjs().format('HH:mm')} 갱신
+                </Typography>
+              )}
+            </Box>
             <Box sx={{ flex: 1, minHeight: 0 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={dailyTrend} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="gfatal" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor={C.fatal} stopOpacity={0.4} />
-                    <stop offset="95%" stopColor={C.fatal} stopOpacity={0.02} />
-                  </linearGradient>
-                  <linearGradient id="gcritical" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor={C.critical} stopOpacity={0.3} />
-                    <stop offset="95%" stopColor={C.critical} stopOpacity={0.02} />
-                  </linearGradient>
-                  <linearGradient id="gmajor" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor={C.major} stopOpacity={0.25} />
-                    <stop offset="95%" stopColor={C.major} stopOpacity={0.02} />
-                  </linearGradient>
-                  <linearGradient id="gminor" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor={C.minor} stopOpacity={0.2} />
-                    <stop offset="95%" stopColor={C.minor} stopOpacity={0.02} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                <XAxis dataKey="date" tick={{ fill: C.muted, fontSize: 11 }} />
-                <YAxis tick={{ fill: C.muted, fontSize: 11 }} allowDecimals={false} />
-                <Tooltip content={<DarkTooltip />} />
-                <Legend
-                  formatter={(v) => <span style={{ color: C.muted, fontSize: '0.7rem' }}>{v}</span>}
-                  wrapperStyle={{ paddingTop: 8 }}
-                />
-                <Area type="monotone" dataKey="fatal"    name="Fatal"    stackId="1"
-                  stroke={C.fatal}    fill="url(#gfatal)"    strokeWidth={2} dot={false} />
-                <Area type="monotone" dataKey="critical" name="Critical" stackId="1"
-                  stroke={C.critical} fill="url(#gcritical)" strokeWidth={2} dot={false} />
-                <Area type="monotone" dataKey="major"    name="Major"    stackId="1"
-                  stroke={C.major}    fill="url(#gmajor)"    strokeWidth={2} dot={false} />
-                <Area type="monotone" dataKey="minor"    name="Minor"    stackId="1"
-                  stroke={C.minor}    fill="url(#gminor)"    strokeWidth={2} dot={false} />
-              </AreaChart>
-            </ResponsiveContainer>
+              {isToday ? (
+                isHourlyLoading || !hourlyData ? (
+                  <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+                    <CircularProgress size={24} />
+                  </Box>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={hourlyData.hourlyTrend} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="gfatal" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%"  stopColor={C.fatal} stopOpacity={0.4} />
+                          <stop offset="95%" stopColor={C.fatal} stopOpacity={0.02} />
+                        </linearGradient>
+                        <linearGradient id="gcritical" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%"  stopColor={C.critical} stopOpacity={0.3} />
+                          <stop offset="95%" stopColor={C.critical} stopOpacity={0.02} />
+                        </linearGradient>
+                        <linearGradient id="gmajor" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%"  stopColor={C.major} stopOpacity={0.25} />
+                          <stop offset="95%" stopColor={C.major} stopOpacity={0.02} />
+                        </linearGradient>
+                        <linearGradient id="gminor" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%"  stopColor={C.minor} stopOpacity={0.2} />
+                          <stop offset="95%" stopColor={C.minor} stopOpacity={0.02} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                      <XAxis dataKey="hour" tick={{ fill: C.muted, fontSize: 10 }} interval={1} />
+                      <YAxis tick={{ fill: C.muted, fontSize: 11 }} allowDecimals={false} />
+                      <Tooltip content={<DarkTooltip />} />
+                      <Legend
+                        formatter={(v) => <span style={{ color: C.muted, fontSize: '0.7rem' }}>{v}</span>}
+                        wrapperStyle={{ paddingTop: 8 }}
+                      />
+                      <Area type="monotone" dataKey="fatal"    name="Fatal"    stackId="1"
+                        stroke={C.fatal}    fill="url(#gfatal)"    strokeWidth={2} dot={false} />
+                      <Area type="monotone" dataKey="critical" name="Critical" stackId="1"
+                        stroke={C.critical} fill="url(#gcritical)" strokeWidth={2} dot={false} />
+                      <Area type="monotone" dataKey="major"    name="Major"    stackId="1"
+                        stroke={C.major}    fill="url(#gmajor)"    strokeWidth={2} dot={false} />
+                      <Area type="monotone" dataKey="minor"    name="Minor"    stackId="1"
+                        stroke={C.minor}    fill="url(#gminor)"    strokeWidth={2} dot={false} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                )
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={dailyTrend} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="gfatal" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%"  stopColor={C.fatal} stopOpacity={0.4} />
+                        <stop offset="95%" stopColor={C.fatal} stopOpacity={0.02} />
+                      </linearGradient>
+                      <linearGradient id="gcritical" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%"  stopColor={C.critical} stopOpacity={0.3} />
+                        <stop offset="95%" stopColor={C.critical} stopOpacity={0.02} />
+                      </linearGradient>
+                      <linearGradient id="gmajor" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%"  stopColor={C.major} stopOpacity={0.25} />
+                        <stop offset="95%" stopColor={C.major} stopOpacity={0.02} />
+                      </linearGradient>
+                      <linearGradient id="gminor" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%"  stopColor={C.minor} stopOpacity={0.2} />
+                        <stop offset="95%" stopColor={C.minor} stopOpacity={0.02} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                    <XAxis dataKey="date" tick={{ fill: C.muted, fontSize: 11 }} />
+                    <YAxis tick={{ fill: C.muted, fontSize: 11 }} allowDecimals={false} />
+                    <Tooltip content={<DarkTooltip />} />
+                    <Legend
+                      formatter={(v) => <span style={{ color: C.muted, fontSize: '0.7rem' }}>{v}</span>}
+                      wrapperStyle={{ paddingTop: 8 }}
+                    />
+                    <Area type="monotone" dataKey="fatal"    name="Fatal"    stackId="1"
+                      stroke={C.fatal}    fill="url(#gfatal)"    strokeWidth={2} dot={false} />
+                    <Area type="monotone" dataKey="critical" name="Critical" stackId="1"
+                      stroke={C.critical} fill="url(#gcritical)" strokeWidth={2} dot={false} />
+                    <Area type="monotone" dataKey="major"    name="Major"    stackId="1"
+                      stroke={C.major}    fill="url(#gmajor)"    strokeWidth={2} dot={false} />
+                    <Area type="monotone" dataKey="minor"    name="Minor"    stackId="1"
+                      stroke={C.minor}    fill="url(#gminor)"    strokeWidth={2} dot={false} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              )}
             </Box>
           </Card>
         </Grid>

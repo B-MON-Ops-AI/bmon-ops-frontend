@@ -17,6 +17,14 @@ export function useSummary(days = 7) {
   });
 }
 
+export function useHourlyTrend() {
+  return useQuery({
+    queryKey: ['dashboard-hourly-trend'],
+    queryFn: () => dashboardApi.getHourlyTrend(),
+    refetchInterval: POLLING,
+  });
+}
+
 export function useWidgets() {
   return useQuery({
     queryKey: ['widgets'],

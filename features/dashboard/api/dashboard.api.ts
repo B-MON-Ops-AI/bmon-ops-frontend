@@ -10,6 +10,9 @@ export const dashboardApi = {
   getSummary: (days = 7) =>
     dashboardClient().get(`/dashboard/summary`, { params: { days } }).then((r) => r.data),
 
+  getHourlyTrend: () =>
+    dashboardClient().get(`/dashboard/hourly-trend`).then((r) => r.data),
+
   getWidgets: () =>
     dashboardClient().get<WidgetListResponse>('/dashboard/widgets').then((r) => r.data),
 

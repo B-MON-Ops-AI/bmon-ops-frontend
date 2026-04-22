@@ -5,4 +5,5 @@
  */
 export { default as DashboardLayout } from './ui/DashboardLayout';
 export { default as AppHeader } from './ui/AppHeader';
+export { default as AppSidebar } from './ui/AppSidebar';
 export { default as GlobalSnackbar } from './ui/GlobalSnackbar';

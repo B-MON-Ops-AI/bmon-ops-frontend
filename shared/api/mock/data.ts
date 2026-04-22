@@ -1010,3 +1010,39 @@ export function getMockDashboardSummary(days: number) {
 }
 
 export const MOCK_DASHBOARD_SUMMARY = getMockDashboardSummary(7);
+
+// ── Dashboard Hourly Trend (오늘 시간대별 인시던트 추이) ─────────
+// 오늘(04-22) 실제 인시던트 발생 패턴 기반:
+// - 새벽/이른아침: 거의 없음
+// - 업무 시작(09시~): 점진적 증가
+// - 오후(12~15시): Critical/Fatal 집중 발생 (현재 오픈 인시던트 기준)
+// - 이후 시간대: 0 (미발생 / 미래)
+
+export const MOCK_HOURLY_TREND = {
+  hourlyTrend: [
+    { hour: '00시', fatal: 0, critical: 0, major: 0, minor: 0 },
+    { hour: '01시', fatal: 0, critical: 0, major: 0, minor: 0 },
+    { hour: '02시', fatal: 0, critical: 0, major: 0, minor: 1 },
+    { hour: '03시', fatal: 0, critical: 0, major: 0, minor: 0 },
+    { hour: '04시', fatal: 0, critical: 0, major: 0, minor: 0 },
+    { hour: '05시', fatal: 0, critical: 0, major: 0, minor: 0 },
+    { hour: '06시', fatal: 0, critical: 0, major: 0, minor: 0 },
+    { hour: '07시', fatal: 0, critical: 0, major: 0, minor: 0 },
+    { hour: '08시', fatal: 0, critical: 0, major: 1, minor: 0 },
+    { hour: '09시', fatal: 0, critical: 1, major: 0, minor: 1 },
+    { hour: '10시', fatal: 0, critical: 0, major: 1, minor: 2 },
+    { hour: '11시', fatal: 0, critical: 0, major: 0, minor: 1 },
+    { hour: '12시', fatal: 0, critical: 1, major: 1, minor: 0 },
+    { hour: '13시', fatal: 0, critical: 1, major: 1, minor: 1 },
+    { hour: '14시', fatal: 1, critical: 1, major: 0, minor: 1 },
+    { hour: '15시', fatal: 0, critical: 0, major: 0, minor: 0 },
+    { hour: '16시', fatal: 0, critical: 0, major: 0, minor: 0 },
+    { hour: '17시', fatal: 0, critical: 0, major: 0, minor: 0 },
+    { hour: '18시', fatal: 0, critical: 0, major: 0, minor: 0 },
+    { hour: '19시', fatal: 0, critical: 0, major: 0, minor: 0 },
+    { hour: '20시', fatal: 0, critical: 0, major: 0, minor: 0 },
+    { hour: '21시', fatal: 0, critical: 0, major: 0, minor: 0 },
+    { hour: '22시', fatal: 0, critical: 0, major: 0, minor: 0 },
+    { hour: '23시', fatal: 0, critical: 0, major: 0, minor: 0 },
+  ],
+};

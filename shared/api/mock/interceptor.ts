@@ -7,7 +7,7 @@ import type { AxiosInstance, InternalAxiosRequestConfig } from 'axios';
 import {
   MOCK_WIDGETS, MOCK_METRICS, MOCK_INCIDENTS, MOCK_CRITICAL_CHECK,
   MOCK_AI_ANALYSIS, MOCK_CHAT_HISTORY, MOCK_THRESHOLDS,
-  MOCK_NOTIFICATIONS, MOCK_USERS, getMockDashboardSummary,
+  MOCK_NOTIFICATIONS, MOCK_USERS, getMockDashboardSummary, MOCK_HOURLY_TREND,
 } from '@/shared/api/mock/data';
 
 function delay(ms = 250) {
@@ -28,6 +28,7 @@ function getMockData(
   if (serviceName === 'dashboard') {
     if (method === 'get' && url === '/dashboard/summary')
       return getMockDashboardSummary(Number(config.params?.days ?? 7));
+    if (method === 'get' && url === '/dashboard/hourly-trend') return MOCK_HOURLY_TREND;
     if (method === 'get' && url === '/dashboard/widgets') return MOCK_WIDGETS;
 
     if (method === 'get' && url.startsWith('/dashboard/metrics/')) {
