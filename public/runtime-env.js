@@ -7,5 +7,5 @@ window.__runtime_config__ = {
   AI_HOST:        "http://10.217.136.185:19091",
   CHAT_HOST:      "http://10.217.136.185:19091",
   SETTINGS_HOST:  "http://10.217.136.185:19091",
-  MOCK_MODE: true,
+  MOCK_MODE: false,
 };
