@@ -232,6 +232,9 @@ export default function IncidentDetailDrawer({ incident, onClose }: Props) {
     });
 
   // ── Chat 전송 (백엔드 AI 연동) ─────────────────────────
+  // incident별 고유 세션을 사용하여 알람 컨텍스트가 다른 대화와 섞이지 않도록 함
+  const incidentSessionId = incident ? `incident-${incident.alarmHstSeq}` : 'incident-unknown';
+
   const handleChatSend = async () => {
     const query = chatInput.trim();
     if (!query || chatLoading) return;
@@ -242,6 +245,7 @@ export default function IncidentDetailDrawer({ incident, onClose }: Props) {
     try {
       const response = await chatApi.query({
         query,
+        session_id: incidentSessionId,
         alarm_hst_seq: incident?.alarmHstSeq ? Number(incident.alarmHstSeq) : undefined,
       });
       setChatMessages((prev) => [...prev, { role: 'ai', content: response.answer.summary }]);
@@ -303,14 +307,43 @@ export default function IncidentDetailDrawer({ incident, onClose }: Props) {
           {/* 메시지 영역 */}
           <Box sx={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 1.5, mb: 2 }}>
             {chatMessages.length === 0 && (
-              <Box sx={{ textAlign: 'center', py: 6 }}>
-                <PsychologyIcon sx={{ fontSize: 48, color: 'rgba(99,102,241,0.3)', mb: 1.5 }} />
-                <Typography variant="body2" color="text.secondary" mb={0.5}>
-                  이 인시던트에 대해 AI에게 질문하세요
-                </Typography>
-                <Typography variant="caption" color="text.disabled">
-                  예: &quot;이 알람이 반복되는 원인은?&quot;, &quot;임계값을 어떻게 조정하면 좋을까?&quot;
-                </Typography>
+              <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 4, gap: 2 }}>
+                {/* 알람 컨텍스트 로드 안내 */}
+                <Box
+                  sx={{
+                    width: '100%',
+                    p: 1.5,
+                    borderRadius: 1.5,
+                    backgroundColor: 'rgba(99,102,241,0.06)',
+                    border: '1px solid rgba(99,102,241,0.2)',
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: 1,
+                  }}
+                >
+                  <ChatIcon sx={{ fontSize: 16, color: '#818CF8', mt: 0.1, flexShrink: 0 }} />
+                  <Box>
+                    <Typography variant="caption" color="#818CF8" fontWeight={600} display="block" mb={0.25}>
+                      알람 컨텍스트 로드됨
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" display="block">
+                      #{incident.alarmHstSeq} · {incident.alarmName}
+                    </Typography>
+                    <Typography variant="caption" color="text.disabled" display="block">
+                      {incident.serviceName}
+                    </Typography>
+                  </Box>
+                </Box>
+                {/* 질문 안내 */}
+                <Box sx={{ textAlign: 'center' }}>
+                  <PsychologyIcon sx={{ fontSize: 36, color: 'rgba(99,102,241,0.3)', mb: 1 }} />
+                  <Typography variant="body2" color="text.secondary" mb={0.5}>
+                    이 알람에 대해 AI에게 질문하세요
+                  </Typography>
+                  <Typography variant="caption" color="text.disabled">
+                    예: &quot;반복 발생 원인은?&quot;, &quot;임계값 조정 방법은?&quot;
+                  </Typography>
+                </Box>
               </Box>
             )}
             {chatMessages.map((msg, i) => (

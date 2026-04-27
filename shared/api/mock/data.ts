@@ -294,6 +294,258 @@ export const MOCK_METRICS: Record<string, Record<string, object>> = {
   },
 };
 
+// ── Alarm Conditions (알람 조건 현황) ─────────────────────────
+// 소스: mo_alarm_cond.csv (전체 100건) + mo_alarm_hst.csv (30일 발생 건수)
+// triggerStatus 기준: 0건→no-trigger | 1~10건→normal | 11~30건→frequent | >30건→excessive
+
+function calcTriggerStatus(count: number, useYn: string): 'no-trigger' | 'normal' | 'frequent' | 'excessive' {
+  if (useYn === 'N') return 'no-trigger';
+  if (count === 0) return 'no-trigger';
+  if (count <= 10) return 'normal';
+  if (count <= 30) return 'frequent';
+  return 'excessive';
+}
+
+const D = (daysAgo: number) =>
+  new Date(Date.now() - daysAgo * 86_400_000).toISOString();
+
+// CSV mo_alarm_cond 추가 필드 (alarm_id → 상세 정보)
+const COND_EXTRA: Record<string, {
+  alarmDesc?: string; svcNm?: string; opNm?: string; chId?: string;
+  detectDow?: string; detectHoliday?: 'H' | 'S' | ''; detectStTime?: string; detectFnsTime?: string;
+  comprType?: 'COMPR_MRTH' | 'COMPR_BLW'; pauseStartDt?: string; pauseEndDt?: string;
+  regDt?: string; chgDt?: string;
+}> = {
+  '195': { alarmDesc: 'KOS 모바일 신규개통 주처리 서비스의 시스템오류 과다 발생', svcNm: '/ORD/PipelineSVC/NNSB/Newsbsc/mobile/PL_MblNewSbscMegaSvc', opNm: 'processNewSbscStoreMega', chId: '', detectDow: '2345670', detectHoliday: 'S', detectStTime: '0000', detectFnsTime: '2359', comprType: 'COMPR_MRTH', regDt: '2024-03-13 13:20:20', chgDt: '' },
+  '94':  { alarmDesc: 'KOS 무선오더 기변 주처리 서비스의 시스템오류 과다 발생', svcNm: '/ORD/PipelineSVC/NINT/IntmSbsc/mobile/PL_IcgMainPrcs', opNm: 'IcgMainPrcs', chId: '', detectDow: '2345670', detectHoliday: 'S', detectStTime: '0800', detectFnsTime: '2000', comprType: 'COMPR_MRTH', regDt: '2024-02-22 15:13:57', chgDt: '2024-02-22 15:57:30' },
+  '100': { alarmDesc: 'KOS 무선오더 가입상품정보조회 시스템 오류 다량 발생', svcNm: 'SpcfProdGrpIdJoinIndYNRetvSO', opNm: '', chId: '', detectDow: '2345671', detectHoliday: '', detectStTime: '0000', detectFnsTime: '2359', comprType: 'COMPR_MRTH', regDt: '2024-02-22 15:21:14', chgDt: '2024-03-13 13:13:25' },
+  '96':  { alarmDesc: 'KOS 무선오더 심플할인스폰서통합조회 시스템 오류 다량 발생', svcNm: '/ORD/PipelineSVC/NSEN/SaleEngtCont/mobile/SpnsrRetv/Sds/PL_SdsInfoAdm', opNm: 'retrieveSdsItg', chId: '', detectDow: '2345671', detectHoliday: '', detectStTime: '0000', detectFnsTime: '2359', comprType: 'COMPR_MRTH', regDt: '2024-02-22 15:15:40', chgDt: '2024-03-13 13:12:19' },
+  '201': { alarmDesc: 'KOS 무선오더 정지복구 시스템 오류 다량 발생', svcNm: '/ORD/PipelineSVC/NCNC/StopLoseTrmn/mobile/PL_SvcContStopAdm', opNm: 'saveSvcContStopReles', chId: '', detectDow: '2345671', detectHoliday: '', detectStTime: '0000', detectFnsTime: '2359', comprType: 'COMPR_MRTH', regDt: '2024-03-13 13:26:32', chgDt: '' },
+  '9':   { alarmDesc: 'BMON_KOS-오더_시스템오류_SKTLGT이동성응답처리_미등록단말', svcNm: '/ORD/PipelineSVC/NINT/IntmSbsc/mobile/PL_IntmUsimOmdInfoResponseTrt', opNm: '', chId: 'EB', detectDow: '2345671', detectHoliday: '', detectStTime: '0000', detectFnsTime: '2359', comprType: 'COMPR_MRTH', regDt: '2024-01-31 15:29:12', chgDt: '2024-03-13 13:11:33' },
+  '292': { alarmDesc: '마이페이지 요금납부 비즈니스 오류 건수 증가', svcNm: '/BCC/PipelineSVC/NRMN/PL_RmnyMgt', opNm: 'treatPymn', chId: 'ME', detectDow: '2345671', detectHoliday: '', detectStTime: '0000', detectFnsTime: '2359', comprType: 'COMPR_MRTH', regDt: '2025-03-20 18:03:39', chgDt: '2025-07-01 01:01:43' },
+  '3':   { alarmDesc: '시스템오류_KAIT 부정가입방지실명인증 - 발생시 GW 확인 필요', svcNm: '/CDM/PipelineSVC/NCST/CustInfoAdm/PL_CustFraudSbscPrvnAthn', opNm: '', chId: 'EB', detectDow: '2345670', detectHoliday: 'H', detectStTime: '0810', detectFnsTime: '2159', comprType: 'COMPR_MRTH', regDt: '2024-01-04 17:05:04', chgDt: '2024-03-06 14:59:45' },
+  '53':  { alarmDesc: '각 채널 호출 API 고객동의 시스템 오류 다량 발생', svcNm: '/CDM/PipelineSVC/NCST/CustInfoAdm/PL_CustAgreeInfoAdm', opNm: '', chId: 'EB', detectDow: '2345670', detectHoliday: 'H', detectStTime: '0800', detectFnsTime: '1959', comprType: 'COMPR_MRTH', regDt: '2024-02-20 17:12:09', chgDt: '2024-02-28 17:46:42' },
+  '302': { alarmDesc: '안면인증 URL 요청시 시스템 오류 발생 시 각 채널에 이상 유무 확인', svcNm: '/CDM/PipelineSVC/NCST/CustInfoAdm/PL_CustFathRqt', opNm: '', chId: 'EB', detectDow: '2345670', detectHoliday: 'H', detectStTime: '0800', detectFnsTime: '2000', comprType: 'COMPR_MRTH', regDt: '2026-03-05 10:18:04', chgDt: '2026-03-06 09:08:22' },
+  '6':   { alarmDesc: '', svcNm: '/B2C/PipelineSVC/Ai/PL_AiRecordBS', opNm: '', chId: 'EB', detectDow: '2345671', detectHoliday: '', detectStTime: '0000', detectFnsTime: '2359', comprType: 'COMPR_MRTH', regDt: '2024-01-31 14:44:19', chgDt: '2024-01-31 14:45:30' },
+  '55':  { alarmDesc: '마이페이지 해지접수 신청 서비스 연동이 1일 기준 10건 이하일때 알람 발생', svcNm: '/B2C/PipelineSVC/Mkt/PL_CollectCampSubject', opNm: 'setCollectCampSubject', chId: 'ME', detectDow: '2345671', detectHoliday: '', detectStTime: '0000', detectFnsTime: '2359', comprType: 'COMPR_BLW', pauseStartDt: '2025-03-15 22:05:59', pauseEndDt: '2025-03-16 22:04:59', regDt: '2024-02-20 18:06:12', chgDt: '2025-03-18 10:46:03' },
+  '56':  { alarmDesc: '/B2C/PipelineSVC/Ci/PL_KtChannelLogIO 응답시간_10초이상 지연 확인', svcNm: '/B2C/PipelineSVC/Ci/PL_KtChannelLogIO', opNm: '', chId: 'EB', detectDow: '2345671', detectHoliday: '', detectStTime: '0000', detectFnsTime: '2359', comprType: 'COMPR_MRTH', regDt: '2024-02-21 15:31:33', chgDt: '2024-03-15 13:39:56' },
+  '221': { alarmDesc: '/B2C/PipelineSVC/SrTt/PL_ContResultOrg 1일 1만건 이하', svcNm: '/B2C/PipelineSVC/Ci/PL_ABCSMSPrioritySend', opNm: '', chId: 'EB', detectDow: '2345600', detectHoliday: 'H', detectStTime: '0000', detectFnsTime: '2359', comprType: 'COMPR_BLW', regDt: '2024-03-15 14:47:40', chgDt: '2024-03-18 17:55:16' },
+  '295': { alarmDesc: '[유선/인터넷] OSS 프리오더링 시스템 오류 5분 내 30건 이상', svcNm: '/ORD/PipelineSVC/NECH/Mloc/internet/PL_InetFcltInfoByEqpAdrRetv', opNm: 'retrieveInetFcltInfoByEqpAdr', chId: 'CO', detectDow: '2345670', detectHoliday: 'H', detectStTime: '0700', detectFnsTime: '2159', comprType: 'COMPR_MRTH', regDt: '2025-07-07 08:41:54', chgDt: '' },
+  '7':   { alarmDesc: '', svcNm: '', opNm: '', chId: 'IC', detectDow: '2345670', detectHoliday: 'H', detectStTime: '0000', detectFnsTime: '2359', comprType: 'COMPR_MRTH', regDt: '2024-01-31 14:53:44', chgDt: '2024-02-06 09:41:16' },
+  '18':  { alarmDesc: '[NBSS_B2B : B2B CRM][B2B-PO - CoreBiz] 최근 1분 서비스[전체]OP[전체] 시스템오류 1분간 10 이상 발생', svcNm: '', opNm: '', chId: 'BC', detectDow: '2345600', detectHoliday: 'H', detectStTime: '0800', detectFnsTime: '1900', comprType: 'COMPR_MRTH', regDt: '2024-02-02 10:38:57', chgDt: '2024-02-02 11:20:52' },
+  '241': { alarmDesc: '', svcNm: 'CorRqtConfTgtRetvSO', opNm: 'service', chId: 'EB', detectDow: '2345600', detectHoliday: 'S', detectStTime: '0800', detectFnsTime: '1859', comprType: 'COMPR_MRTH', regDt: '2024-03-18 16:48:02', chgDt: '2024-03-22 09:20:55' },
+  '16':  { alarmDesc: '[RDS] 채널:전체 [전체][RDS - CoreBiz] 최근 10분 서비스[전체]OP[전체] 평균응답시간[ms] 10분간 3000 이상 발생', svcNm: '', opNm: '', chId: 'RD', detectDow: '2345670', detectHoliday: 'H', detectStTime: '0900', detectFnsTime: '1959', comprType: 'COMPR_MRTH', regDt: '2024-02-01 17:02:30', chgDt: '2024-03-04 10:54:44' },
+  '5':   { alarmDesc: '정책지 조회 오류', svcNm: 'PopaBasRetvSO', opNm: '', chId: 'RD', detectDow: '2345670', detectHoliday: 'H', detectStTime: '0900', detectFnsTime: '1959', comprType: 'COMPR_MRTH', regDt: '2024-01-30 09:44:32', chgDt: '2024-03-04 13:19:02' },
+};
+
+export const MOCK_ALARM_CONDITIONS = {
+  conditions: [
+    // ── BG011701 KOS-무선오더 (25건) ──────────────────────────
+    { alarmId: '195', serviceId: 'BG011701', serviceName: 'KOS-무선오더', alarmLevel: 'Major',    detectType: 'ERR_S',      detectTerm: 'MIN5',  threshold: 40,    useYn: 'Y', triggerCount30d: 42, unresolvedCount: 2, latestTriggerAt: D(0.05), alarmName: 'KOS 모바일 신규개통 시스템오류 과다 발생' },
+    { alarmId: '94',  serviceId: 'BG011701', serviceName: 'KOS-무선오더', alarmLevel: 'Critical', detectType: 'ERR_S',      detectTerm: 'MIN5',  threshold: 50,    useYn: 'Y', triggerCount30d: 8,  unresolvedCount: 1, latestTriggerAt: D(0.1),  alarmName: 'KOS 무선오더 기변 시스템 오류 다량 발생' },
+    { alarmId: '100', serviceId: 'BG011701', serviceName: 'KOS-무선오더', alarmLevel: 'Major',    detectType: 'ERR_S',      detectTerm: 'MIN5',  threshold: 50,    useYn: 'Y', triggerCount30d: 15, unresolvedCount: 0, latestTriggerAt: D(1),    alarmName: 'KOS 무선오더 가입상품정보조회 시스템 오류 다량 발생' },
+    { alarmId: '96',  serviceId: 'BG011701', serviceName: 'KOS-무선오더', alarmLevel: 'Major',    detectType: 'ERR_S',      detectTerm: 'MIN5',  threshold: 50,    useYn: 'Y', triggerCount30d: 6,  unresolvedCount: 0, latestTriggerAt: D(2),    alarmName: 'KOS 무선오더 심플할인스폰서통합조회 시스템 오류 다량 발생' },
+    { alarmId: '201', serviceId: 'BG011701', serviceName: 'KOS-무선오더', alarmLevel: 'Minor',    detectType: 'ERR_S',      detectTerm: 'MIN5',  threshold: 40,    useYn: 'Y', triggerCount30d: 11, unresolvedCount: 0, latestTriggerAt: D(3),    alarmName: 'KOS 무선오더 정지복구 시스템 오류 다량 발생' },
+    { alarmId: '9',   serviceId: 'BG011701', serviceName: 'KOS-무선오더', alarmLevel: 'Critical', detectType: 'ERR_S',      detectTerm: 'MIN1',  threshold: 20,    useYn: 'N', triggerCount30d: 0,  unresolvedCount: 0, latestTriggerAt: null,    alarmName: 'BMON_KOS-오더_시스템오류_SKTLGT이동성응답처리_미등록단말' },
+    { alarmId: '101', serviceId: 'BG011701', serviceName: 'KOS-무선오더', alarmLevel: 'Minor',    detectType: 'ERR_S',      detectTerm: 'MIN5',  threshold: 40,    useYn: 'Y', triggerCount30d: 0,  unresolvedCount: 0, latestTriggerAt: null,    alarmName: 'KOS 무선오더 해지 시스템 오류 다량 발생' },
+    { alarmId: '102', serviceId: 'BG011701', serviceName: 'KOS-무선오더', alarmLevel: 'Minor',    detectType: 'ERR_S',      detectTerm: 'MIN5',  threshold: 40,    useYn: 'Y', triggerCount30d: 3,  unresolvedCount: 0, latestTriggerAt: D(7),    alarmName: 'KOS 무선오더 번호이동 시스템 오류 다량 발생' },
+    { alarmId: '105', serviceId: 'BG011701', serviceName: 'KOS-무선오더', alarmLevel: 'Major',    detectType: 'ERR_S',      detectTerm: 'MIN5',  threshold: 50,    useYn: 'Y', triggerCount30d: 0,  unresolvedCount: 0, latestTriggerAt: null,    alarmName: 'KOS 무선오더 선택약정 시스템 오류 다량 발생' },
+    { alarmId: '108', serviceId: 'BG011701', serviceName: 'KOS-무선오더', alarmLevel: 'Critical', detectType: 'ERR_S',      detectTerm: 'MIN5',  threshold: 50,    useYn: 'Y', triggerCount30d: 1,  unresolvedCount: 0, latestTriggerAt: D(14),   alarmName: 'KOS 무선오더 결합상품 가입 시스템 오류' },
+    { alarmId: '191', serviceId: 'BG011701', serviceName: 'KOS-무선오더', alarmLevel: 'Major',    detectType: 'ERR_S',      detectTerm: 'MIN5',  threshold: 50,    useYn: 'Y', triggerCount30d: 0,  unresolvedCount: 0, latestTriggerAt: null,    alarmName: 'KOS 무선오더 부가서비스 변경 시스템 오류' },
+    { alarmId: '192', serviceId: 'BG011701', serviceName: 'KOS-무선오더', alarmLevel: 'Minor',    detectType: 'ERR_S',      detectTerm: 'MIN5',  threshold: 40,    useYn: 'Y', triggerCount30d: 0,  unresolvedCount: 0, latestTriggerAt: null,    alarmName: 'KOS 무선오더 기기변경 보조금 조회 오류' },
+
+    // ── BG011706 KOS-유선공통 (42건 중 대표) ───────────────────
+    { alarmId: '7',   serviceId: 'BG011706', serviceName: 'KOS-유선공통', alarmLevel: 'Minor',    detectType: 'ERR_S',      detectTerm: 'MIN5',  threshold: 20,    useYn: 'Y', triggerCount30d: 0,  unresolvedCount: 0, latestTriggerAt: null,    alarmName: '[Order-유선] 채널:전체 [ICIS-CoreBiz] 시스템오류 5분간 20건 이상' },
+    { alarmId: '11',  serviceId: 'BG011706', serviceName: 'KOS-유선공통', alarmLevel: 'Minor',    detectType: 'ERR_S',      detectTerm: 'MIN1',  threshold: 5,     useYn: 'Y', triggerCount30d: 0,  unresolvedCount: 0, latestTriggerAt: null,    alarmName: '[유선/인터넷] PL_MlocInetKdbInfo 오류 5건 이상 발생' },
+    { alarmId: '12',  serviceId: 'BG011706', serviceName: 'KOS-유선공통', alarmLevel: 'Minor',    detectType: 'ERR_S',      detectTerm: 'MIN1',  threshold: 5,     useYn: 'Y', triggerCount30d: 0,  unresolvedCount: 0, latestTriggerAt: null,    alarmName: '[유선/인터넷] PL_KtcAprgdsDlvrSndbkInfoResltIf 오류 5건 이상 발생' },
+    { alarmId: '295', serviceId: 'BG011706', serviceName: 'KOS-유선공통', alarmLevel: 'Critical', detectType: 'ERR_S',      detectTerm: 'MIN5',  threshold: 30,    useYn: 'Y', triggerCount30d: 5,  unresolvedCount: 0, latestTriggerAt: D(4),    alarmName: '[유선/인터넷] OSS 프리오더링 시스템오류 30건 이상' },
+    { alarmId: '65',  serviceId: 'BG011706', serviceName: 'KOS-유선공통', alarmLevel: 'Critical', detectType: 'ERR_S',      detectTerm: 'MIN5',  threshold: 500,   useYn: 'Y', triggerCount30d: 1,  unresolvedCount: 0, latestTriggerAt: D(20),   alarmName: '[Order-유선] NBSS_OBT 오더배치 ESB Integration 오류 500건' },
+    { alarmId: '64',  serviceId: 'BG011706', serviceName: 'KOS-유선공통', alarmLevel: 'Critical', detectType: 'ERR_S',      detectTerm: 'MIN5',  threshold: 500,   useYn: 'Y', triggerCount30d: 0,  unresolvedCount: 0, latestTriggerAt: null,    alarmName: '[Order-유선] NBSS_CORD Order LT CoreBiz 오류 500건' },
+    { alarmId: '63',  serviceId: 'BG011706', serviceName: 'KOS-유선공통', alarmLevel: 'Critical', detectType: 'ERR_S',      detectTerm: 'MIN5',  threshold: 500,   useYn: 'Y', triggerCount30d: 0,  unresolvedCount: 0, latestTriggerAt: null,    alarmName: '[Order-유선] NBSS_CORD Order LT ESB Integration 오류 500건' },
+    { alarmId: '43',  serviceId: 'BG011706', serviceName: 'KOS-유선공통', alarmLevel: 'Major',    detectType: 'ERR_S',      detectTerm: 'MIN1',  threshold: 500,   useYn: 'Y', triggerCount30d: 0,  unresolvedCount: 0, latestTriggerAt: null,    alarmName: '[유선] Msafer PL_MsaferIfSnd 오류 500건 이상' },
+    { alarmId: '41',  serviceId: 'BG011706', serviceName: 'KOS-유선공통', alarmLevel: 'Major',    detectType: 'ERR_S',      detectTerm: 'MIN1',  threshold: 500,   useYn: 'Y', triggerCount30d: 0,  unresolvedCount: 0, latestTriggerAt: null,    alarmName: '[유선] CrdtInfoAdm PL_CcardAth 오류 500건 이상' },
+    { alarmId: '58',  serviceId: 'BG011706', serviceName: 'KOS-유선공통', alarmLevel: 'Minor',    detectType: 'RPY_TIME',   detectTerm: 'MIN5',  threshold: 3000,  useYn: 'N', triggerCount30d: 0,  unresolvedCount: 0, latestTriggerAt: null,    alarmName: '[Order-유선] ICIS-CoreBiz 평균응답시간 3000ms 이상' },
+    { alarmId: '26',  serviceId: 'BG011706', serviceName: 'KOS-유선공통', alarmLevel: 'Minor',    detectType: 'ERR_S',      detectTerm: 'MIN1',  threshold: 5,     useYn: 'N', triggerCount30d: 0,  unresolvedCount: 0, latestTriggerAt: null,    alarmName: '[유선/인터넷] PL_SucesPadRcvr 오류 5건 이상 발생' },
+    { alarmId: '59',  serviceId: 'BG011706', serviceName: 'KOS-유선공통', alarmLevel: 'Major',    detectType: 'ERR_S',      detectTerm: 'MIN5',  threshold: 50,    useYn: 'Y', triggerCount30d: 0,  unresolvedCount: 0, latestTriggerAt: null,    alarmName: '[Order-유선] NBSS_COBT 오더배치 LT ESB Integration 오류 50건' },
+    { alarmId: '74',  serviceId: 'BG011706', serviceName: 'KOS-유선공통', alarmLevel: 'Minor',    detectType: 'ERR_S',      detectTerm: 'MIN1',  threshold: 5,     useYn: 'Y', triggerCount30d: 0,  unresolvedCount: 0, latestTriggerAt: null,    alarmName: '[유선] PL_MyslfAthnPrcs 오류 5건 이상 발생' },
+    { alarmId: '75',  serviceId: 'BG011706', serviceName: 'KOS-유선공통', alarmLevel: 'Minor',    detectType: 'ERR_S',      detectTerm: 'MIN1',  threshold: 5,     useYn: 'Y', triggerCount30d: 0,  unresolvedCount: 0, latestTriggerAt: null,    alarmName: '[유선/인터넷] PL_KtcAprgdsDelTrt 오류 5건 이상 발생' },
+
+    // ── BG008802 KOS-요금온라인 (1건) ─────────────────────────
+    { alarmId: '292', serviceId: 'BG008802', serviceName: 'KOS-요금온라인', alarmLevel: 'Major',   detectType: 'ERR_E',      detectTerm: 'HOUR1', threshold: 100,   useYn: 'Y', triggerCount30d: 3,  unresolvedCount: 0, latestTriggerAt: D(5),    alarmName: '마이페이지 요금납부 비즈니스 오류 증가' },
+
+    // ── BG008702 KOS-통합고객 (6건) ────────────────────────────
+    { alarmId: '3',   serviceId: 'BG008702', serviceName: 'KOS-통합고객', alarmLevel: 'Major',    detectType: 'ERR_S',      detectTerm: 'MIN5',  threshold: 800,   useYn: 'Y', triggerCount30d: 5,  unresolvedCount: 0, latestTriggerAt: D(3),    alarmName: 'KOS-CDM 시스템오류 KAIT 부정가입방지실명인증 Major' },
+    { alarmId: '53',  serviceId: 'BG008702', serviceName: 'KOS-통합고객', alarmLevel: 'Critical', detectType: 'ERR_S',      detectTerm: 'MIN10', threshold: 300,   useYn: 'Y', triggerCount30d: 2,  unresolvedCount: 0, latestTriggerAt: D(8),    alarmName: '고객동의정보 PL 시스템오류 다량 발생 Critical' },
+    { alarmId: '302', serviceId: 'BG008702', serviceName: 'KOS-통합고객', alarmLevel: 'Minor',    detectType: 'ERR_S',      detectTerm: 'MIN5',  threshold: 300,   useYn: 'Y', triggerCount30d: 0,  unresolvedCount: 0, latestTriggerAt: null,    alarmName: '안면인증 URL 요청 시스템오류 Minor' },
+
+    // ── BG009102 KOS-B2C CRM (10건 중 대표) ───────────────────
+    { alarmId: '6',   serviceId: 'BG009102', serviceName: 'KOS-B2C CRM', alarmLevel: 'Critical',  detectType: 'ERR_S',      detectTerm: 'MIN1',  threshold: 30,    useYn: 'N', triggerCount30d: 0,  unresolvedCount: 0, latestTriggerAt: null,    alarmName: 'BMON 시스템오류 B2C-CRM 상담 Assist 연동' },
+    { alarmId: '55',  serviceId: 'BG009102', serviceName: 'KOS-B2C CRM', alarmLevel: 'Critical',  detectType: 'CALL_CASCNT',detectTerm: 'DAY1',  threshold: 10,    useYn: 'Y', triggerCount30d: 0,  unresolvedCount: 0, latestTriggerAt: null,    alarmName: '마이페이지 해지접수 신청 CRM 연동' },
+    { alarmId: '56',  serviceId: 'BG009102', serviceName: 'KOS-B2C CRM', alarmLevel: 'Major',     detectType: 'RPY_TIME',   detectTerm: 'MIN10', threshold: 10000, useYn: 'Y', triggerCount30d: 0,  unresolvedCount: 0, latestTriggerAt: null,    alarmName: 'SMS채널로그 지연확인 10000ms 이상' },
+    { alarmId: '202', serviceId: 'BG009102', serviceName: 'KOS-B2C CRM', alarmLevel: 'Major',     detectType: 'RPY_TIME',   detectTerm: 'MIN10', threshold: 10000, useYn: 'Y', triggerCount30d: 0,  unresolvedCount: 0, latestTriggerAt: null,    alarmName: 'SMS발송지연 확인 10000ms 이상' },
+    { alarmId: '203', serviceId: 'BG009102', serviceName: 'KOS-B2C CRM', alarmLevel: 'Major',     detectType: 'RPY_TIME',   detectTerm: 'MIN10', threshold: 10000, useYn: 'Y', triggerCount30d: 0,  unresolvedCount: 0, latestTriggerAt: null,    alarmName: 'CI 업무지연 확인 10000ms 이상' },
+    { alarmId: '221', serviceId: 'BG009102', serviceName: 'KOS-B2C CRM', alarmLevel: 'Minor',     detectType: 'CALL_CASCNT',detectTerm: 'DAY1',  threshold: 10000, useYn: 'Y', triggerCount30d: 25, unresolvedCount: 3, latestTriggerAt: D(0.5),  alarmName: 'SRTT 호출건수 확인 10000건 이하' },
+
+    // ── BG009201 KOS-B2B CRM (13건 중 대표) ───────────────────
+    { alarmId: '18',  serviceId: 'BG009201', serviceName: 'KOS-B2B CRM', alarmLevel: 'Minor',    detectType: 'ERR_S',      detectTerm: 'MIN1',  threshold: 10,    useYn: 'Y', triggerCount30d: 0,  unresolvedCount: 0, latestTriggerAt: null,    alarmName: 'B2B 시스템오류' },
+    { alarmId: '19',  serviceId: 'BG009201', serviceName: 'KOS-B2B CRM', alarmLevel: 'Minor',    detectType: 'ERR_S',      detectTerm: 'MIN1',  threshold: 10,    useYn: 'Y', triggerCount30d: 0,  unresolvedCount: 0, latestTriggerAt: null,    alarmName: '고객 시스템오류' },
+    { alarmId: '20',  serviceId: 'BG009201', serviceName: 'KOS-B2B CRM', alarmLevel: 'Minor',    detectType: 'ERR_S',      detectTerm: 'MIN1',  threshold: 10,    useYn: 'Y', triggerCount30d: 0,  unresolvedCount: 0, latestTriggerAt: null,    alarmName: '기회 시스템오류' },
+    { alarmId: '21',  serviceId: 'BG009201', serviceName: 'KOS-B2B CRM', alarmLevel: 'Minor',    detectType: 'ERR_S',      detectTerm: 'MIN1',  threshold: 10,    useYn: 'Y', triggerCount30d: 0,  unresolvedCount: 0, latestTriggerAt: null,    alarmName: '견적 시스템오류' },
+    { alarmId: '241', serviceId: 'BG009201', serviceName: 'KOS-B2B CRM', alarmLevel: 'Critical', detectType: 'ERR_RATE',   detectTerm: 'DAY1',  threshold: 100,   useYn: 'Y', triggerCount30d: 0,  unresolvedCount: 0, latestTriggerAt: null,    alarmName: '공조요청확인대상조회 오류율 알림' },
+    { alarmId: '242', serviceId: 'BG009201', serviceName: 'KOS-B2B CRM', alarmLevel: 'Critical', detectType: 'ERR_RATE',   detectTerm: 'DAY1',  threshold: 100,   useYn: 'Y', triggerCount30d: 0,  unresolvedCount: 0, latestTriggerAt: null,    alarmName: '수용조직명조회 오류율 알림' },
+    { alarmId: '223', serviceId: 'BG009201', serviceName: 'KOS-B2B CRM', alarmLevel: 'Minor',    detectType: 'RPY_TIME',   detectTerm: 'DAY1',  threshold: 1500,  useYn: 'Y', triggerCount30d: 0,  unresolvedCount: 0, latestTriggerAt: null,    alarmName: '승인단계내역수정 평균응답알람 1500ms 이상' },
+    { alarmId: '225', serviceId: 'BG009201', serviceName: 'KOS-B2B CRM', alarmLevel: 'Minor',    detectType: 'RPY_TIME',   detectTerm: 'HOUR1', threshold: 1500,  useYn: 'Y', triggerCount30d: 0,  unresolvedCount: 0, latestTriggerAt: null,    alarmName: '관리고객사업장정보조회 평균응답알람 1500ms 이상' },
+
+    // ── BG009001 KOS-물류 (3건) ────────────────────────────────
+    { alarmId: '16',  serviceId: 'BG009001', serviceName: 'KOS-물류', alarmLevel: 'Minor',       detectType: 'RPY_TIME',   detectTerm: 'MIN10', threshold: 3000,  useYn: 'Y', triggerCount30d: 0,  unresolvedCount: 0, latestTriggerAt: null,    alarmName: 'RDS 평균응답시간 3000ms 이상' },
+    { alarmId: '5',   serviceId: 'BG009001', serviceName: 'KOS-물류', alarmLevel: 'Minor',       detectType: 'ERR_S',      detectTerm: 'MIN5',  threshold: 2,     useYn: 'Y', triggerCount30d: 2,  unresolvedCount: 0, latestTriggerAt: D(10),   alarmName: '정책지 조회오류 2건 이상' },
+  ].map((c) => ({
+    alarmDesc: null as string | null,
+    svcNm: null as string | null,
+    opNm: null as string | null,
+    chId: null as string | null,
+    detectDow: '2345671',
+    detectHoliday: '' as 'H' | 'S' | '',
+    detectStTime: '0000',
+    detectFnsTime: '2359',
+    comprType: 'COMPR_MRTH' as 'COMPR_MRTH' | 'COMPR_BLW',
+    pauseStartDt: null as string | null,
+    pauseEndDt: null as string | null,
+    regDt: null as string | null,
+    chgDt: null as string | null,
+    ...COND_EXTRA[c.alarmId],
+    ...c,
+    triggerStatus: calcTriggerStatus(c.triggerCount30d, c.useYn),
+  })),
+  get totalCount() { return this.conditions.length; },
+};
+
+// ── Service Status (커스텀 Wall) ─────────────────────────────
+// 데이터 소스:
+//   - mo_alarm_hst: 서비스별 알람 집계 (BG008702/BG008802/BG009001/BG011706)
+//   - mo_bymi_ch_svc_stat: 도메인별 처리건수·오류율·응답시간
+//   - mo_bymi_biz_svc_stat id=19 DOMORDER: 분당 ~10,000건
+//
+// health 도출 기준:
+//   unresolved fatal>0 → critical | critical>0 → danger | major>0 → warning
+//   minor>0 → caution | 없음 → normal
+
+export const MOCK_SERVICE_STATUSES = {
+  services: [
+    {
+      // mo_alarm_hst: alarm_hst_seq=12001,12015 (Critical 2건, open)
+      // ch_ingrs_stat DOMORDER/OT: 10,841/min
+      serviceId: 'BG011701',
+      serviceName: 'KOS-무선오더',
+      requestPerMin: 10841,
+      errorRate: 0.05,
+      maxResponseMs: 3455,
+      avgResponseMs: 142,
+      alarms: { fatal: 0, critical: 2, major: 0, minor: 0, unresolved: 2 },
+      health: 'danger',
+      recentAlarms: [
+        { seq: 12001, name: 'KOS 모바일 신규개통 시스템오류', level: 'Critical' },
+        { seq: 12015, name: 'KOS 무선오더 해지 시스템 오류', level: 'Critical' },
+      ],
+      requestChart: makeChart(10841, 0.12),
+      updatedAt: new Date().toISOString(),
+    },
+    {
+      // mo_alarm_hst: Minor=9건, 전부 해소(unresolved=0)
+      // ch_svc_stat DOMORDER: 1,645/min, err_e=36(2.19%), max_rpy=8,509ms
+      serviceId: 'BG011706',
+      serviceName: 'KOS-유선공통',
+      requestPerMin: 1645,
+      errorRate: 2.19,
+      maxResponseMs: 8509,
+      avgResponseMs: 114,
+      alarms: { fatal: 0, critical: 0, major: 0, minor: 9, unresolved: 0 },
+      health: 'normal',
+      recentAlarms: [],
+      requestChart: makeChart(1645, 0.18),
+      updatedAt: new Date().toISOString(),
+    },
+    {
+      // mo_alarm_hst: Major=1건, Minor=77건, 75건 미해소(clear_yn=N)
+      // biz_svc_stat id=19: 10,247/min, max_rpy=13,689ms
+      serviceId: 'BG008802',
+      serviceName: 'KOS-요금온라인',
+      requestPerMin: 10247,
+      errorRate: 0.32,
+      maxResponseMs: 1423,
+      avgResponseMs: 137,
+      alarms: { fatal: 0, critical: 0, major: 1, minor: 77, unresolved: 75 },
+      health: 'warning',
+      recentAlarms: [
+        { seq: 11769, name: '요금온라인 전체 서비스 시스템오류 10분간 30건 이상 발생', level: 'Minor' },
+      ],
+      requestChart: makeChart(10247, 0.12),
+      updatedAt: new Date().toISOString(),
+    },
+    {
+      // mo_alarm_hst: Critical=1, Major=7, Minor=2 — 전부 해소(unresolved=0)
+      // ch_ingrs_stat DOMB2CCRM/OM: 19,820/min
+      serviceId: 'BG008702',
+      serviceName: 'KOS-통합고객',
+      requestPerMin: 19820,
+      errorRate: 0.02,
+      maxResponseMs: 850,
+      avgResponseMs: 72,
+      alarms: { fatal: 0, critical: 0, major: 0, minor: 0, unresolved: 0 },
+      health: 'normal',
+      recentAlarms: [],
+      requestChart: makeChart(19820, 0.08),
+      updatedAt: new Date().toISOString(),
+    },
+    {
+      // mo_alarm_hst: 해당 데이터 없음 → 시나리오 기반 (Minor 3건 미해소)
+      // ch_ingrs_stat DOMB2CCRM/UI: ~400/min, 에러율 높음
+      serviceId: 'BG009102',
+      serviceName: 'KOS-B2C CRM',
+      requestPerMin: 397,
+      errorRate: 3.42,
+      maxResponseMs: 2100,
+      avgResponseMs: 193,
+      alarms: { fatal: 0, critical: 0, major: 0, minor: 3, unresolved: 3 },
+      health: 'caution',
+      recentAlarms: [
+        { seq: 9102, name: 'B2C CRM SMS 발송 오류율 임계 초과', level: 'Minor' },
+      ],
+      requestChart: makeChart(397, 0.2),
+      updatedAt: new Date().toISOString(),
+    },
+    {
+      // ch_ingrs_stat DOMB2BCRM: 저트래픽, 안정적
+      serviceId: 'BG009201',
+      serviceName: 'KOS-B2B CRM',
+      requestPerMin: 85,
+      errorRate: 0.12,
+      maxResponseMs: 450,
+      avgResponseMs: 58,
+      alarms: { fatal: 0, critical: 0, major: 0, minor: 0, unresolved: 0 },
+      health: 'normal',
+      recentAlarms: [],
+      requestChart: makeChart(85, 0.25),
+      updatedAt: new Date().toISOString(),
+    },
+    {
+      // mo_alarm_hst: Critical=2건, 전부 해소(unresolved=0)
+      // ch_svc_stat DOMLT: 5,292건, err=45(0.85%), max_rpy=16,136ms
+      serviceId: 'BG009001',
+      serviceName: 'KOS-물류',
+      requestPerMin: 5292,
+      errorRate: 0.85,
+      maxResponseMs: 16136,
+      avgResponseMs: 58,
+      alarms: { fatal: 0, critical: 2, major: 0, minor: 0, unresolved: 0 },
+      health: 'normal',
+      recentAlarms: [],
+      requestChart: makeChart(5292, 0.15),
+      updatedAt: new Date().toISOString(),
+    },
+  ],
+};
+
 // ── Incidents ────────────────────────────────────────────────
 // 소스: mo_alarm_hst (실제 발생) + mo_alarm_cond (조건 정의 기반 시나리오)
 // alarm_lvl 매핑: Critical/Fatal → critical, Major → warning, Minor → info
@@ -774,91 +1026,6 @@ export const MOCK_CHAT_HISTORY = {
   totalPages: 1,
 };
 
-// ── Settings: Thresholds ─────────────────────────────────────
-// 소스: mo_alarm_cond의 실제 임계값 + bmonown.mo 메트릭 기반 적정값
-
-export const MOCK_THRESHOLDS = {
-  thresholds: [
-    {
-      serviceId: 'BG008802', serviceName: 'KOS-요금온라인',
-      errorRate: 30,       // mo_alarm_cond alarm_id=46: thrs=30 (CALL_CASCNT)
-      responseTime: 3000,  // 일반적 임계 기준
-      traffic: 500000,     // biz_svc_stat 시간당 ~600K 기준
-    },
-    {
-      serviceId: 'BG011701', serviceName: 'KOS-무선오더',
-      errorRate: 50,       // mo_alarm_cond alarm_id=51,87,94: thrs=50
-      responseTime: 2000,
-      traffic: 650000,     // ch_ingrs_stat DOMORDER/OT 10,841/min 기준
-    },
-    {
-      serviceId: 'BG008702', serviceName: 'KOS-통합고객',
-      errorRate: 800,      // mo_alarm_cond alarm_id=3: thrs=800 (CDM KAIT)
-      responseTime: 1000,
-      traffic: 1200000,    // ch_ingrs_stat DOMB2CCRM/OM 19,820/min 기준
-    },
-    {
-      serviceId: 'BG011706', serviceName: 'KOS-유선공통',
-      errorRate: 5,        // mo_alarm_cond alarm_id=42 유사: thrs=5
-      responseTime: 3000,
-      traffic: 100000,     // ch_ingrs_stat DOMLT/CB 1,645/min 기준
-    },
-    {
-      serviceId: 'BG009102', serviceName: 'KOS-B2C CRM',
-      errorRate: 10,       // mo_alarm_cond alarm_id=191: thrs=10 (ERR_RATE)
-      responseTime: 1500,  // ch_ingrs_stat DOMB2CCRM/UI max 1,464ms
-      traffic: 25000,
-    },
-    {
-      serviceId: 'BG009201', serviceName: 'KOS-B2B CRM',
-      errorRate: 10,       // mo_alarm_cond alarm_id=18: thrs=10
-      responseTime: 1500,  // mo_alarm_cond alarm_id=223: thrs=1500 (RPY_TIME)
-      traffic: 5000,
-    },
-    {
-      serviceId: 'BG009001', serviceName: 'KOS-물류',
-      errorRate: 2,        // mo_alarm_cond alarm_id=5: thrs=2
-      responseTime: 3000,  // mo_alarm_cond alarm_id=16: thrs=3000 (RPY_TIME)
-      traffic: 125000,     // ch_ingrs_stat DOMRDS/ME 2,081/min 기준
-    },
-  ],
-};
-
-// ── Settings: Notifications ──────────────────────────────────
-// 소스: mo_alarm_user의 rcv_type (SMS+EMAIL, SMS, EMAIL, NONE)
-// Slack 제외 — 사내 SMS+EMAIL 시스템만 사용
-
-export const MOCK_NOTIFICATIONS = {
-  slackWebhookUrl: '',
-  receivers: {
-    critical: ['82022082', '82273989', '91256594', '82022899'],
-    warning: ['82022082', '82273989', '82022029'],
-    info: ['82022082'],
-  },
-};
-
-// ── Settings: Users ──────────────────────────────────────────
-// 소스: mo_alarm_user.xlsx의 실제 user_id + mo_alarm_group 매핑
-
-export const MOCK_USERS = {
-  users: [
-    { id: '82022082', name: '김관제', email: 'kwanje82@kt.com', role: 'OPERATOR' as const, isActive: true, createdAt: '2023-08-25T09:00:00Z' },
-    { id: '82273989', name: '이운영', email: 'leewoon@kt.com', role: 'ADMIN' as const, isActive: true, createdAt: '2023-08-25T09:00:00Z' },
-    { id: '91256594', name: '박시스템', email: 'parksys@kt.com', role: 'ADMIN' as const, isActive: true, createdAt: '2023-08-25T09:00:00Z' },
-    { id: '82022029', name: '최실적', email: 'choisil@kt.com', role: 'OPERATOR' as const, isActive: true, createdAt: '2024-01-15T09:00:00Z' },
-    { id: '82022899', name: '정유선', email: 'jungyoo@kt.com', role: 'OPERATOR' as const, isActive: true, createdAt: '2024-01-26T09:00:00Z' },
-    { id: '82108697', name: '강개발', email: 'kangdev@kt.com', role: 'OPERATOR' as const, isActive: true, createdAt: '2024-02-02T09:00:00Z' },
-    { id: '82267289', name: '윤모바', email: 'yoonmob@kt.com', role: 'OPERATOR' as const, isActive: true, createdAt: '2024-03-01T09:00:00Z' },
-    { id: '82022006', name: '한비투', email: 'hanb2c@kt.com', role: 'VIEWER' as const, isActive: true, createdAt: '2024-03-15T09:00:00Z' },
-    { id: '82022136', name: '송물류', email: 'songmul@kt.com', role: 'VIEWER' as const, isActive: true, createdAt: '2024-05-01T09:00:00Z' },
-    { id: '82034632', name: '임비투비', email: 'limb2b@kt.com', role: 'VIEWER' as const, isActive: false, createdAt: '2024-06-01T09:00:00Z' },
-    { id: '82061387', name: '오에스엠', email: 'ohsms@kt.com', role: 'OPERATOR' as const, isActive: true, createdAt: '2024-08-22T09:00:00Z' },
-    { id: '116901375', name: '서신입', email: 'seoshin@kt.com', role: 'VIEWER' as const, isActive: true, createdAt: '2025-12-19T09:00:00Z' },
-  ],
-  totalElements: 12,
-  totalPages: 2,
-  currentPage: 0,
-};
 
 // ── Dashboard Summary ────────────────────────────────────────
 // mo_alarm_hst 집계 기반, days 파라미터별 분리

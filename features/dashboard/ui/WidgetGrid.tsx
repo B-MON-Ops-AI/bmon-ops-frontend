@@ -18,9 +18,10 @@ import { useAppDispatch, showSnackbar } from '@/shared/store';
 
 interface Props {
   onAddWidget?: () => void;
+  serviceIds?: string[]; // null/undefined = 전체, 배열 = 해당 서비스만 표시
 }
 
-export default function WidgetGrid({ onAddWidget }: Props) {
+export default function WidgetGrid({ onAddWidget, serviceIds }: Props) {
   const dispatch = useAppDispatch();
   const { data, isLoading } = useWidgets();
   const { mutate: deleteWidget } = useDeleteWidget();
@@ -40,7 +41,8 @@ export default function WidgetGrid({ onAddWidget }: Props) {
     );
   }
 
-  const widgets = data?.widgets ?? [];
+  const allWidgets = data?.widgets ?? [];
+  const widgets = serviceIds ? allWidgets.filter((w) => serviceIds.includes(w.serviceId)) : allWidgets;
 
   return (
     <Box>

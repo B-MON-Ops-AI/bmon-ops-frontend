@@ -72,8 +72,9 @@ export default function ChatPanel() {
       { id: `user-${Date.now()}`, role: 'user', content: query, createdAt: new Date().toISOString() },
     ]);
 
+    // nav 바 일반 채팅은 "general" 세션을 사용 (incident 채팅과 컨텍스트 분리)
     sendChat(
-      { query },
+      { query, session_id: 'general' },
       {
         onSuccess: (data) => {
           setLocalMessages((prev) => [

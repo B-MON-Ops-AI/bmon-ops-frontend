@@ -4,7 +4,7 @@
  * @module features/dashboard/api
  */
 import { dashboardClient } from '@/shared/api';
-import type { WidgetListResponse, MetricData, Widget, WidgetOrderItem } from '@/entities/dashboard';
+import type { WidgetListResponse, MetricData, Widget, WidgetOrderItem, ServiceStatusListResponse } from '@/entities/dashboard';
 
 export const dashboardApi = {
   getSummary: (days = 7) =>
@@ -33,4 +33,7 @@ export const dashboardApi = {
 
   deleteWidget: (widgetId: string) =>
     dashboardClient().delete(`/dashboard/widgets/${widgetId}`).then((r) => r.data),
+
+  getServiceStatuses: () =>
+    dashboardClient().get<ServiceStatusListResponse>('/dashboard/service-statuses').then((r) => r.data),
 };

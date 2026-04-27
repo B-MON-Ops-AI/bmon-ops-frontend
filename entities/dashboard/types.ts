@@ -36,3 +36,39 @@ export interface WidgetOrderItem {
   id: string;
   order: number;
 }
+
+// ── 서비스 상태 (커스텀 Wall) ─────────────────────────────────
+
+export type HealthStatus = 'normal' | 'caution' | 'warning' | 'danger' | 'critical';
+
+export interface AlarmSummary {
+  fatal: number;
+  critical: number;
+  major: number;
+  minor: number;
+  unresolved: number;
+}
+
+export interface RecentAlarm {
+  seq: number;
+  name: string;
+  level: 'Fatal' | 'Critical' | 'Major' | 'Minor';
+}
+
+export interface ServiceStatus {
+  serviceId: string;
+  serviceName: string;
+  requestPerMin: number;
+  errorRate: number;
+  maxResponseMs: number;
+  avgResponseMs: number;
+  alarms: AlarmSummary;
+  health: HealthStatus;
+  recentAlarms: RecentAlarm[];
+  requestChart: ChartDataPoint[];
+  updatedAt: string;
+}
+
+export interface ServiceStatusListResponse {
+  services: ServiceStatus[];
+}

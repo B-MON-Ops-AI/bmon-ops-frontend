@@ -59,4 +59,3 @@ export const dashboardClient = () => createClient(API_CONFIG.DASHBOARD_URL, 'das
 export const incidentClient = () => createClient(API_CONFIG.INCIDENT_URL, 'incident');
 export const aiClient = () => createClient(API_CONFIG.AI_URL, 'ai');
 export const chatClient = () => createClient(API_CONFIG.CHAT_URL, 'chat');
-export const settingsClient = () => createClient(API_CONFIG.SETTINGS_URL, 'settings');

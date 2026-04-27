@@ -67,3 +67,11 @@ export function useDeleteWidget() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['widgets'] }),
   });
 }
+
+export function useServiceStatuses() {
+  return useQuery({
+    queryKey: ['service-statuses'],
+    queryFn: () => dashboardApi.getServiceStatuses(),
+    refetchInterval: POLLING,
+  });
+}

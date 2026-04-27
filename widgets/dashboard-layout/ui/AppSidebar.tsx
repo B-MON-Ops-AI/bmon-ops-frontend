@@ -4,30 +4,22 @@ import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Badge from "@mui/material/Badge";
 import DashboardIcon from "@mui/icons-material/Dashboard";
-import SettingsIcon from "@mui/icons-material/Settings";
 import GridViewIcon from "@mui/icons-material/GridView";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import DashboardCustomizeIcon from "@mui/icons-material/DashboardCustomize";
 import ChatBubbleIcon from "@mui/icons-material/ChatBubble";
+import NotificationsNoneIcon from "@mui/icons-material/NotificationsNone";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  useAppDispatch,
-  useAppSelector,
-  toggleChatPanel,
-  setDashboardTab,
-} from "@/shared/store";
+import { useAppDispatch, toggleChatPanel } from "@/shared/store";
 import { useCriticalCheck } from "@/features/incidents";
 
 export const SIDEBAR_WIDTH = 200;
 
 const dashTabs = [
-  { icon: <GridViewIcon sx={{ fontSize: 13 }} />, label: "OverAll" },
-  { icon: <WarningAmberIcon sx={{ fontSize: 13 }} />, label: "인시던트 Wall" },
-  {
-    icon: <DashboardCustomizeIcon sx={{ fontSize: 13 }} />,
-    label: "커스텀 Wall",
-  },
+  { href: "/dashboard/overall", icon: <GridViewIcon sx={{ fontSize: 13 }} />, label: "OverAll" },
+  { href: "/dashboard/incident-wall", icon: <WarningAmberIcon sx={{ fontSize: 13 }} />, label: "인시던트 Wall" },
+  { href: "/dashboard/custom-wall", icon: <DashboardCustomizeIcon sx={{ fontSize: 13 }} />, label: "커스텀 Wall" },
 ];
 
 const navItemSx = (active: boolean) => ({
@@ -57,13 +49,11 @@ const navItemSx = (active: boolean) => ({
 export default function AppSidebar() {
   const dispatch = useAppDispatch();
   const pathname = usePathname();
-  const dashboardTab = useAppSelector((s) => s.ui.dashboardTab);
   const { data: criticalData } = useCriticalCheck();
   const criticalCount = criticalData?.criticalCount ?? 0;
 
-  const isDashboard =
-    pathname === "/dashboard" || pathname.startsWith("/dashboard");
-  const isSettings = pathname.startsWith("/settings");
+  const isDashboard = pathname.startsWith("/dashboard");
+  const isAlarmConditions = pathname === "/dashboard/alarm-conditions";
 
   return (
     <Box
@@ -83,7 +73,7 @@ export default function AppSidebar() {
       {/* 로고 */}
       <Box
         component={Link}
-        href="/dashboard"
+        href="/dashboard/overall"
         sx={{
           display: "flex",
           alignItems: "center",
@@ -117,7 +107,11 @@ export default function AppSidebar() {
       {/* 네비게이션 */}
       <Box sx={{ flex: 1, overflowY: "auto", py: 0.5 }}>
         {/* 대시보드 */}
-        <Box component={Link} href="/dashboard" sx={navItemSx(isDashboard)}>
+        <Box
+          component={Link}
+          href="/dashboard/overall"
+          sx={navItemSx(isDashboard && !isAlarmConditions)}
+        >
           <Badge
             badgeContent={criticalCount}
             color="error"
@@ -136,16 +130,17 @@ export default function AppSidebar() {
           <span>대시보드</span>
         </Box>
 
-        {/* 대시보드 서브탭 (대시보드 활성 시) */}
-        {isDashboard && (
+        {/* 대시보드 서브탭 */}
+        {isDashboard && !isAlarmConditions && (
           <Box sx={{ mt: 0.25, mb: 0.5 }}>
-            {dashTabs.map((t, i) => {
-              const sel = dashboardTab === i;
-              const showBadge = i === 1 && criticalCount > 0;
+            {dashTabs.map((t) => {
+              const sel = pathname === t.href;
+              const showBadge = t.href === "/dashboard/incident-wall" && criticalCount > 0;
               return (
                 <Box
-                  key={i}
-                  onClick={() => dispatch(setDashboardTab(i))}
+                  key={t.href}
+                  component={Link}
+                  href={t.href}
                   sx={{
                     ...navItemSx(sel),
                     pl: 3.5,
@@ -191,19 +186,22 @@ export default function AppSidebar() {
           </Box>
         )}
 
-        {/* 설정 */}
-        <Box component={Link} href="/settings" sx={navItemSx(isSettings)}>
-          <SettingsIcon sx={{ fontSize: 15 }} />
-          <span>설정</span>
+        {/* 알람 조건 현황 */}
+        <Box
+          component={Link}
+          href="/dashboard/alarm-conditions"
+          sx={navItemSx(isAlarmConditions)}
+        >
+          <NotificationsNoneIcon sx={{ fontSize: 15 }} />
+          <span>알람 조건</span>
         </Box>
-      </Box>
 
-      {/* 하단 AI 버튼 */}
-      <Box sx={{ py: 1, borderTop: "1px solid rgba(255,255,255,0.07)" }}>
+        {/* AI 어시스턴트 */}
         <Box onClick={() => dispatch(toggleChatPanel())} sx={navItemSx(false)}>
           <ChatBubbleIcon sx={{ fontSize: 15 }} />
           <span>AI 어시스턴트</span>
         </Box>
+
       </Box>
     </Box>
   );
