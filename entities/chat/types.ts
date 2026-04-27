@@ -12,6 +12,7 @@ export interface ChatMessage {
 
 export interface ChatQueryRequest {
   query: string;
+  session_id?: string;
   alarm_hst_seq?: number;
 }
 
