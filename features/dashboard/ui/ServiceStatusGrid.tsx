@@ -48,7 +48,7 @@ export default function ServiceStatusGrid({ serviceIds }: Props) {
     <>
       <Grid container spacing={2}>
         {sorted.map((status) => (
-          <Grid key={status.serviceId} item xs={12} sm={6} md={4} lg={3}>
+          <Grid key={status.serviceId} item xs={12} sm={6} md={4} lg={3} sx={{ display: 'flex' }}>
             <ServiceStatusCard
               status={status}
               onClick={() => setSelected(status)}

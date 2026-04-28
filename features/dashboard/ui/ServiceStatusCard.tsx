@@ -89,6 +89,7 @@ export default function ServiceStatusCard({ status, onClick }: Props) {
     <Card
       onClick={onClick}
       sx={{
+        width: '100%',
         display: 'flex',
         flexDirection: 'column',
         borderLeft: `3px solid ${hc.color}`,
@@ -100,11 +101,18 @@ export default function ServiceStatusCard({ status, onClick }: Props) {
         } : { boxShadow: `0 0 0 1px ${hc.color}44` },
       }}
     >
-      <CardContent sx={{ pb: '12px !important', p: 1.5 }}>
+      <CardContent sx={{ pb: '12px !important', p: 1.5, flex: 1, display: 'flex', flexDirection: 'column' }}>
         {/* ── 헤더 ── */}
         <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 1 }}>
-          <Box>
-            <Typography sx={{ fontSize: '0.82rem', fontWeight: 700, lineHeight: 1.3 }}>
+          <Box sx={{ minWidth: 0, flex: 1, mr: 1 }}>
+            <Typography sx={{
+              fontSize: '0.82rem',
+              fontWeight: 700,
+              lineHeight: 1.3,
+              overflow: 'hidden',
+              whiteSpace: 'nowrap',
+              textOverflow: 'ellipsis',
+            }}>
               {status.serviceName}
             </Typography>
             <Typography sx={{ fontSize: '0.65rem', color: 'text.disabled', lineHeight: 1.2 }}>
@@ -150,7 +158,7 @@ export default function ServiceStatusCard({ status, onClick }: Props) {
         {/* ── 핵심 지표 ── */}
         <Box sx={{ display: 'flex', gap: 0.5, mb: 1 }}>
           <MetricItem
-            label="처리건수"
+            label="유입호출량"
             value={`${status.requestPerMin.toLocaleString()}/min`}
           />
           <Box sx={{ width: '1px', bgcolor: 'rgba(255,255,255,0.08)' }} />
@@ -172,41 +180,37 @@ export default function ServiceStatusCard({ status, onClick }: Props) {
         {/* ── 트래픽 추이 ── */}
         <MiniChart data={status.requestChart} color={hc.color} />
 
-        {/* ── 미해소 알람 목록 ── */}
-        {status.recentAlarms.length > 0 && (
-          <>
-            <Divider sx={{ borderColor: 'rgba(255,255,255,0.06)', mt: 1, mb: 0.75 }} />
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-              {status.recentAlarms.slice(0, 2).map((alarm) => (
-                <Box key={alarm.seq} sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.75 }}>
-                  <Box
-                    sx={{
-                      mt: '3px',
-                      width: 6,
-                      height: 6,
-                      borderRadius: '50%',
-                      bgcolor: LEVEL_COLOR[alarm.level] ?? '#94A3B8',
-                      flexShrink: 0,
-                    }}
-                  />
-                  <Typography
-                    sx={{
-                      fontSize: '0.65rem',
-                      color: 'text.secondary',
-                      lineHeight: 1.4,
-                      overflow: 'hidden',
-                      display: '-webkit-box',
-                      WebkitLineClamp: 2,
-                      WebkitBoxOrient: 'vertical',
-                    }}
-                  >
-                    {alarm.name}
-                  </Typography>
-                </Box>
-              ))}
+        {/* ── 미해소 알람 목록 (항상 렌더링, 고정 높이로 카드 크기 통일) ── */}
+        <Divider sx={{ borderColor: 'rgba(255,255,255,0.06)', mt: 1, mb: 0.75 }} />
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, height: 52 }}>
+          {status.recentAlarms.slice(0, 2).map((alarm) => (
+            <Box key={alarm.seq} sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.75 }}>
+              <Box
+                sx={{
+                  mt: '3px',
+                  width: 6,
+                  height: 6,
+                  borderRadius: '50%',
+                  bgcolor: LEVEL_COLOR[alarm.level] ?? '#94A3B8',
+                  flexShrink: 0,
+                }}
+              />
+              <Typography
+                sx={{
+                  fontSize: '0.65rem',
+                  color: 'text.secondary',
+                  lineHeight: 1.4,
+                  overflow: 'hidden',
+                  display: '-webkit-box',
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: 'vertical',
+                }}
+              >
+                {alarm.name}
+              </Typography>
             </Box>
-          </>
-        )}
+          ))}
+        </Box>
       </CardContent>
     </Card>
   );

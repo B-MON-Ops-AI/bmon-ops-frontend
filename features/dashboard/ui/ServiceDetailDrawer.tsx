@@ -230,7 +230,7 @@ export default function ServiceDetailDrawer({ status, onClose }: Props) {
                     <Box
                       key={alarm.seq}
                       sx={{
-                        display: 'flex', alignItems: 'center', gap: 1,
+                        display: 'flex', alignItems: 'flex-start', gap: 1,
                         px: 1.25, py: 0.875,
                         borderRadius: 1.5,
                         backgroundColor: LEVEL_BG[alarm.level] ?? 'rgba(255,255,255,0.02)',
@@ -241,14 +241,14 @@ export default function ServiceDetailDrawer({ status, onClose }: Props) {
                         label={alarm.level}
                         size="small"
                         sx={{
-                          height: 18, fontSize: '0.58rem', fontWeight: 700, flexShrink: 0,
+                          height: 18, fontSize: '0.58rem', fontWeight: 700, flexShrink: 0, mt: '1px',
                           backgroundColor: 'transparent',
                           color: LEVEL_COLOR[alarm.level] ?? '#94A3B8',
                           border: `1px solid ${LEVEL_COLOR[alarm.level] ?? '#94A3B8'}55`,
                           '& .MuiChip-label': { px: 0.75 },
                         }}
                       />
-                      <Typography sx={{ fontSize: '0.72rem', color: 'text.secondary', lineHeight: 1.4 }}>
+                      <Typography sx={{ fontSize: '0.72rem', color: 'text.secondary', lineHeight: 1.4, minWidth: 0, wordBreak: 'break-word' }}>
                         {alarm.name}
                       </Typography>
                     </Box>

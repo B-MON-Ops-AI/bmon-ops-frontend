@@ -7,7 +7,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { dashboardApi } from '@/features/dashboard/api/dashboard.api';
 import type { WidgetOrderItem } from '@/entities/dashboard';
 
-const POLLING = Number(process.env.NEXT_PUBLIC_POLLING_INTERVAL ?? 30_000);
+const POLLING = Number(process.env.NEXT_PUBLIC_POLLING_INTERVAL ?? 60_000);
 
 export function useSummary(days = 7) {
   return useQuery({

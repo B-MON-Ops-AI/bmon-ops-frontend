@@ -117,8 +117,8 @@ interface Props {
 export default function AlarmConditionDetailDrawer({ cond, onClose, aiLoading, aiContent, onRequestAi }: Props) {
   if (!cond) return null;
 
-  const lc = LEVEL_CONFIG[cond.alarmLevel];
-  const tc = TRIGGER_CONFIG[cond.triggerStatus];
+  const lc = LEVEL_CONFIG[cond.alarmLevel] ?? LEVEL_CONFIG['Minor'];
+  const tc = TRIGGER_CONFIG[cond.triggerStatus] ?? TRIGGER_CONFIG['normal'];
   const canRequestAi = cond.triggerStatus === 'no-trigger' && cond.useYn === 'Y';
 
   const countColor = cond.triggerCount30d > 30 ? '#F87171'

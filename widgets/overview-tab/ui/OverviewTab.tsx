@@ -417,7 +417,7 @@ export default function OverviewTab() {
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
                       <XAxis dataKey="hour" tick={{ fill: C.muted, fontSize: 10 }} interval={1} />
-                      <YAxis tick={{ fill: C.muted, fontSize: 11 }} allowDecimals={false} />
+                      <YAxis tick={{ fill: C.muted, fontSize: 11 }} allowDecimals={false} domain={[0, (dataMax: number) => Math.max(dataMax, 5)]} />
                       <Tooltip content={<DarkTooltip />} />
                       <Legend
                         formatter={(v) => <span style={{ color: C.muted, fontSize: '0.7rem' }}>{v}</span>}
@@ -457,7 +457,7 @@ export default function OverviewTab() {
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
                     <XAxis dataKey="date" tick={{ fill: C.muted, fontSize: 11 }} />
-                    <YAxis tick={{ fill: C.muted, fontSize: 11 }} allowDecimals={false} />
+                    <YAxis tick={{ fill: C.muted, fontSize: 11 }} allowDecimals={false} domain={[0, (dataMax: number) => Math.max(dataMax, 5)]} />
                     <Tooltip content={<DarkTooltip />} />
                     <Legend
                       formatter={(v) => <span style={{ color: C.muted, fontSize: '0.7rem' }}>{v}</span>}

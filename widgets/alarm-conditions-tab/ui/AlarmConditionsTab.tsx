@@ -201,8 +201,8 @@ interface CardRowProps {
 }
 
 function AlarmConditionCard({ cond, aiLoading, aiContent, onRequestAi, onClick }: CardRowProps) {
-  const lc = LEVEL_CONFIG[cond.alarmLevel];
-  const tc = TRIGGER_CONFIG[cond.triggerStatus];
+  const lc = LEVEL_CONFIG[cond.alarmLevel] ?? LEVEL_CONFIG['Minor'];
+  const tc = TRIGGER_CONFIG[cond.triggerStatus] ?? TRIGGER_CONFIG['normal'];
   const isInactive = cond.useYn === 'N';
   const canRequestAi = cond.triggerStatus === 'no-trigger' && cond.useYn === 'Y';
   const aiOpen = aiLoading || !!aiContent;
