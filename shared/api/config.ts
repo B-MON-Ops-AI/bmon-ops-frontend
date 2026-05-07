@@ -10,6 +10,7 @@ type RuntimeConfig = {
   INCIDENT_HOST: string;
   AI_HOST: string;
   CHAT_HOST: string;
+  SETTINGS_HOST: string;
   MOCK_MODE?: boolean;
 };
 
@@ -30,6 +31,7 @@ function getConfig(): RuntimeConfig {
     INCIDENT_HOST: process.env.NEXT_PUBLIC_INCIDENT_API_URL ?? 'http://localhost:8083',
     AI_HOST: process.env.NEXT_PUBLIC_AI_API_URL ?? 'http://localhost:8084',
     CHAT_HOST: process.env.NEXT_PUBLIC_CHAT_API_URL ?? 'http://localhost:8085',
+    SETTINGS_HOST: process.env.NEXT_PUBLIC_SETTINGS_API_URL ?? 'http://localhost:8086',
   };
 }
 
@@ -46,5 +48,6 @@ export const API_CONFIG = {
   get INCIDENT_URL() { return `${getConfig().INCIDENT_HOST}${getConfig().API_GROUP}`; },
   get AI_URL() { return `${getConfig().AI_HOST}${getConfig().API_GROUP}`; },
   get CHAT_URL() { return `${getConfig().CHAT_HOST}${getConfig().API_GROUP}`; },
+  get SETTINGS_URL() { return `${getConfig().SETTINGS_HOST}${getConfig().API_GROUP}`; },
   TIMEOUT: 30000,
 };
