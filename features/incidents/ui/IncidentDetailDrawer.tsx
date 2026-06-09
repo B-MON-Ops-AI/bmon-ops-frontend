@@ -34,7 +34,6 @@ import InsightsIcon from '@mui/icons-material/Insights';
 import ChatIcon from '@mui/icons-material/Chat';
 import SendIcon from '@mui/icons-material/Send';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
-import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import 'dayjs/locale/ko';
@@ -136,14 +135,6 @@ function SimilarCaseCard({
               <Typography variant="body2" color="success.light" sx={{ lineHeight: 1.6 }}>{sc.resolution}</Typography>
             </Box>
           </Box>
-        </Box>
-      )}
-      {sc.resolution && (
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1.5 }}>
-          <Button size="small" endIcon={<ArrowForwardIcon sx={{ fontSize: 13 }} />}
-            sx={{ fontSize: '0.72rem', color: isFirst ? '#818CF8' : 'text.disabled', '&:hover': { color: isFirst ? '#A5B4FC' : 'text.secondary' } }}>
-            이 방법 참고하기
-          </Button>
         </Box>
       )}
     </Box>

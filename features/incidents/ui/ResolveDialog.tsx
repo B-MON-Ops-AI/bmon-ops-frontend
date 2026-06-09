@@ -31,12 +31,12 @@ export default function ResolveDialog({ open, onClose, onConfirm, isPending }: P
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>인시던트 해결</DialogTitle>
-      <DialogContent>
+      <DialogTitle sx={{ textAlign: 'center', pb: 1 }}>인시던트 해결</DialogTitle>
+      <DialogContent sx={{ px: 3, pb: 1 }}>
         <TextField
           fullWidth
           multiline
-          rows={3}
+          rows={6}
           label="해결 내용"
           placeholder="어떻게 해결했는지 입력하세요..."
           value={resolution}
@@ -44,13 +44,14 @@ export default function ResolveDialog({ open, onClose, onConfirm, isPending }: P
           sx={{ mt: 1 }}
         />
       </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>취소</Button>
+      <DialogActions sx={{ justifyContent: 'center', gap: 1, px: 3, pb: 3 }}>
+        <Button variant="outlined" onClick={onClose} sx={{ minWidth: 80 }}>취소</Button>
         <Button
           variant="contained"
           color="success"
           onClick={handleConfirm}
           disabled={!resolution.trim() || isPending}
+          sx={{ minWidth: 100 }}
         >
           해결 완료
         </Button>

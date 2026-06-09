@@ -6,7 +6,8 @@
  * @module features/dashboard/ui
  */
 
-import { ResponsiveContainer, AreaChart, Area, Tooltip } from 'recharts';
+import { useEffect, useRef, useState } from 'react';
+import { ResponsiveContainer, AreaChart, Area, Tooltip, YAxis } from 'recharts';
 import type { ChartDataPoint } from '@/entities/dashboard';
 
 interface Props {
@@ -15,23 +16,36 @@ interface Props {
 }
 
 export default function MiniChart({ data, color = '#3B82F6' }: Props) {
+  // SSR에서 ResponsiveContainer는 width=0으로 측정 → 마운트 후에만 렌더링
+  const [mounted, setMounted] = useState(false);
+  // gradId는 인스턴스당 1회만 생성 (렌더마다 바뀌면 gradient 참조가 깨짐)
+  const gradId = useRef(`grad-${Math.random().toString(36).slice(2, 9)}`).current;
+  const yMax = (dataMax: number) => Math.max(dataMax, 1);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) return <div style={{ height: 60 }} />;
+
   return (
     <ResponsiveContainer width="100%" height={60}>
-      <AreaChart data={data} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
+      <AreaChart data={data} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
         <defs>
-          <linearGradient id={`grad-${color.replace('#', '')}`} x1="0" y1="0" x2="0" y2="1">
+          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
             <stop offset="5%" stopColor={color} stopOpacity={0.3} />
             <stop offset="95%" stopColor={color} stopOpacity={0} />
           </linearGradient>
         </defs>
+        <YAxis domain={[0, yMax]} hide />
         <Area
           type="monotone"
           dataKey="value"
           stroke={color}
           strokeWidth={2}
-          fill={`url(#grad-${color.replace('#', '')})`}
+          fill={`url(#${gradId})`}
           dot={false}
-          animationDuration={300}
+          isAnimationActive={false}
         />
         <Tooltip
           contentStyle={{ backgroundColor: '#1F2937', border: 'none', borderRadius: 8, fontSize: 12 }}
