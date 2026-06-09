@@ -140,36 +140,39 @@ export default function IncidentWallCard({ incident, onClick }: Props) {
             {incident.alarmName}
           </Typography>
 
-          {/* APP / 채널 / 로그포인트 태그 */}
-          {metaTags.length > 0 && (
-            <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mb: 0.75 }}>
-              {metaTags.map(({ label, value }) => (
-                <Chip
-                  key={label}
-                  label={`${label}: ${value}`}
-                  size="small"
-                  sx={{
-                    height: 16,
-                    fontSize: '0.6rem',
-                    backgroundColor: 'rgba(255,255,255,0.06)',
-                    color: 'text.secondary',
-                    border: '1px solid rgba(255,255,255,0.12)',
-                    '& .MuiChip-label': { px: 0.75 },
-                  }}
-                />
-              ))}
-            </Box>
-          )}
+          {/* 메타 정보 영역 — minHeight로 고정하여 카드 높이 통일 */}
+          <Box sx={{ minHeight: 60 }}>
+            {/* APP / 채널 / 로그포인트 태그 */}
+            {metaTags.length > 0 && (
+              <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mb: 0.75 }}>
+                {metaTags.map(({ label, value }) => (
+                  <Chip
+                    key={label}
+                    label={`${label}: ${value}`}
+                    size="small"
+                    sx={{
+                      height: 16,
+                      fontSize: '0.6rem',
+                      backgroundColor: 'rgba(255,255,255,0.06)',
+                      color: 'text.secondary',
+                      border: '1px solid rgba(255,255,255,0.12)',
+                      '& .MuiChip-label': { px: 0.75 },
+                    }}
+                  />
+                ))}
+              </Box>
+            )}
 
-          {/* 서비스명 (svc_nm) */}
-          {svcNmShort && (
-            <MetaTag label="서비스" value={svcNmShort} />
-          )}
+            {/* 서비스명 (svc_nm) */}
+            {svcNmShort && (
+              <MetaTag label="서비스" value={svcNmShort} />
+            )}
 
-          {/* OP명 */}
-          {incident.opNm && (
-            <MetaTag label="OP" value={incident.opNm} />
-          )}
+            {/* OP명 */}
+            {incident.opNm && (
+              <MetaTag label="OP" value={incident.opNm} />
+            )}
+          </Box>
 
           <Divider sx={{ my: 0.75, borderColor: 'rgba(255,255,255,0.06)' }} />
 

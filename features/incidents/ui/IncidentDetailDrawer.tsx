@@ -23,8 +23,6 @@ import LinearProgress from '@mui/material/LinearProgress';
 import CircularProgress from '@mui/material/CircularProgress';
 import Tooltip from '@mui/material/Tooltip';
 import CloseIcon from '@mui/icons-material/Close';
-import CheckIcon from '@mui/icons-material/Check';
-import VolumeOffIcon from '@mui/icons-material/VolumeOff';
 import DoneAllIcon from '@mui/icons-material/DoneAll';
 import PsychologyIcon from '@mui/icons-material/Psychology';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -35,8 +33,6 @@ import TaskAltIcon from '@mui/icons-material/TaskAlt';
 import InsightsIcon from '@mui/icons-material/Insights';
 import ChatIcon from '@mui/icons-material/Chat';
 import SendIcon from '@mui/icons-material/Send';
-import AccessTimeIcon from '@mui/icons-material/AccessTime';
-import TuneIcon from '@mui/icons-material/Tune';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import dayjs from 'dayjs';
@@ -44,10 +40,9 @@ import relativeTime from 'dayjs/plugin/relativeTime';
 import 'dayjs/locale/ko';
 import ReactMarkdown from 'react-markdown';
 import { SeverityChip, StatusChip } from '@/shared/ui';
-import MuteDialog from './MuteDialog';
 import ResolveDialog from './ResolveDialog';
 import { useAIAnalysis, useRequestAnalysis } from '@/features/incidents/model/useAI';
-import { useAckIncident, useMuteIncident, useResolveIncident } from '@/features/incidents/model/useIncidents';
+import { useResolveIncident } from '@/features/incidents/model/useIncidents';
 import { useAppDispatch, showSnackbar } from '@/shared/store';
 import type { Incident } from '@/entities/incident';
 import { chatApi } from '@/features/chat/api/chat.api';
@@ -155,6 +150,38 @@ function SimilarCaseCard({
   );
 }
 
+// ── 상세 정보 헬퍼 ─────────────────────────────────────
+
+function InfoRow({ label, value, mono }: { label: string; value?: string | number | null; mono?: boolean }) {
+  if (value === undefined || value === null || value === '') return null;
+  return (
+    <Box sx={{ display: 'flex', gap: 1, py: 0.5, alignItems: 'flex-start' }}>
+      <Typography variant="caption" color="text.disabled" sx={{ fontSize: '0.65rem', minWidth: 80, flexShrink: 0, pt: 0.1 }}>
+        {label}
+      </Typography>
+      <Typography
+        variant="caption"
+        color="text.secondary"
+        sx={{ fontSize: '0.72rem', lineHeight: 1.5, wordBreak: 'break-all', ...(mono && { fontFamily: 'monospace', color: '#a5b4fc' }) }}
+      >
+        {String(value)}
+      </Typography>
+    </Box>
+  );
+}
+
+function DetailSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <Box sx={{ mb: 1.5 }}>
+      <Typography variant="caption" color="text.disabled"
+        sx={{ fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700, display: 'block', mb: 0.5 }}>
+        {title}
+      </Typography>
+      <Box sx={{ pl: 0.5 }}>{children}</Box>
+    </Box>
+  );
+}
+
 // ── 메인 컴포넌트 ──────────────────────────────────────
 
 interface Props {
@@ -165,7 +192,6 @@ interface Props {
 export default function IncidentDetailDrawer({ incident, onClose }: Props) {
   const dispatch = useAppDispatch();
   const open = !!incident;
-  const [muteOpen, setMuteOpen] = useState(false);
   const [resolveOpen, setResolveOpen] = useState(false);
   const [aiTab, setAiTab] = useState(0); // 0=Chat, 1=유사사례, 2=원인분석, 3=권장조치, 4=발생패턴
 
@@ -177,8 +203,6 @@ export default function IncidentDetailDrawer({ incident, onClose }: Props) {
 
   const { data: analysis, isLoading: analysisLoading } = useAIAnalysis(incident?.id ?? null);
   const { mutate: requestAnalysis, isPending: requesting } = useRequestAnalysis();
-  const { mutate: ack, isPending: acking } = useAckIncident();
-  const { mutate: mute, isPending: muting } = useMuteIncident();
   const { mutate: resolve, isPending: resolving } = useResolveIncident();
 
   // 드로어 열릴 때 분석 자동 시작
@@ -204,21 +228,8 @@ export default function IncidentDetailDrawer({ incident, onClose }: Props) {
 
   if (!incident) return null;
 
-  const isOpen = incident.status === 'open';
   const isCritical = incident.severity === 'fatal' || incident.severity === 'critical';
   const result = analysis?.status === 'completed' ? analysis.result : null;
-
-  const handleAck = () =>
-    ack(incident.id, {
-      onSuccess: () => dispatch(showSnackbar({ message: '인시던트를 확인했습니다.', severity: 'success' })),
-      onError: () => dispatch(showSnackbar({ message: '처리에 실패했습니다.', severity: 'error' })),
-    });
-
-  const handleMute = (minutes: number) =>
-    mute({ incidentId: incident.id, minutes }, {
-      onSuccess: () => { setMuteOpen(false); dispatch(showSnackbar({ message: `${minutes}분 음소거되었습니다.`, severity: 'success' })); },
-      onError: () => dispatch(showSnackbar({ message: '처리에 실패했습니다.', severity: 'error' })),
-    });
 
   const handleResolve = (resolution: string) =>
     resolve({ incidentId: incident.id, resolution }, {
@@ -557,107 +568,111 @@ export default function IncidentDetailDrawer({ incident, onClose }: Props) {
         <DialogContent sx={{ p: 0, display: 'flex', overflow: 'hidden', flex: 1, minHeight: 0 }}>
           <Grid container sx={{ flex: 1, overflow: 'hidden', minHeight: 0 }}>
 
-            {/* ── 좌측: 오류 요약 + 액션 ── */}
+            {/* ── 좌측: 알람 상세 정보 ── */}
             <Grid item xs={12} md={4}
               sx={{
                 borderRight: { md: '1px solid rgba(255,255,255,0.08)' },
                 borderBottom: { xs: '1px solid rgba(255,255,255,0.08)', md: 'none' },
-                display: 'flex', flexDirection: 'column', overflowY: 'auto', p: 3,
+                display: 'flex', flexDirection: 'column',
                 minHeight: 0, maxHeight: '100%',
               }}
             >
-              {/* 알람 정보 */}
-              <Box sx={{ mb: 2 }}>
+              {/* 상단 고정: 발생값 요약 */}
+              <Box sx={{ px: 3, pt: 2.5, pb: 2, flexShrink: 0 }}>
                 <Typography variant="caption" color="text.disabled"
                   sx={{ textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: '0.65rem' }}>
                   {detectTypeLabels[incident.detectType]} · {detectTermLabels[incident.detectTerm]}
                 </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, mb: 1 }}>
-                  {incident.alarmName}
-                </Typography>
-                <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mt: 0.5 }}>
+                <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mt: 0.75 }}>
                   <Typography variant="h3" fontWeight={800} color="error.main" sx={{ lineHeight: 1 }}>
                     {incident.thresholdValue.toLocaleString()}
                   </Typography>
                   <Typography variant="h6" color="error.light">건</Typography>
                 </Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 0.75, mt: 1 }}>
                   <Chip label={`임계 ${incident.threshold.toLocaleString()}건`} size="small"
-                    sx={{ backgroundColor: '#EF444422', color: '#EF4444', fontWeight: 700, fontSize: '0.75rem' }} />
+                    sx={{ backgroundColor: '#EF444422', color: '#EF4444', fontWeight: 700, fontSize: '0.72rem' }} />
                   {incident.clearYn && (
                     <Chip label="자동해소" size="small"
-                      sx={{ backgroundColor: '#10B98122', color: '#10B981', fontWeight: 700, fontSize: '0.75rem' }} />
+                      sx={{ backgroundColor: '#10B98122', color: '#10B981', fontWeight: 700, fontSize: '0.72rem' }} />
                   )}
+                  <StatusChip status={incident.status} />
                 </Box>
               </Box>
 
-              <Divider sx={{ borderColor: 'rgba(255,255,255,0.06)', mb: 2 }} />
+              <Divider sx={{ borderColor: 'rgba(255,255,255,0.06)', flexShrink: 0 }} />
 
-              {/* 메타데이터 */}
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mb: 3 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <AccessTimeIcon sx={{ fontSize: 14, color: 'text.disabled' }} />
-                  <Typography variant="caption" color="text.secondary">
-                    발생: {dayjs(incident.occurredAt).format('YYYY-MM-DD HH:mm')}
-                    <Typography component="span" variant="caption" color="text.disabled"> ({dayjs(incident.occurredAt).fromNow()})</Typography>
-                  </Typography>
-                </Box>
-                {incident.ackedBy && (
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <CheckIcon sx={{ fontSize: 14, color: '#10B981' }} />
-                    <Typography variant="caption" color="text.secondary">확인: {incident.ackedBy} · {dayjs(incident.ackedAt).format('HH:mm')}</Typography>
-                  </Box>
+              {/* 중간 스크롤: 상세 데이터 */}
+              <Box sx={{ flex: 1, overflowY: 'auto', px: 3, py: 2, minHeight: 0 }}>
+
+                <DetailSection title="알람 식별">
+                  <InfoRow label="시퀀스" value={`#${incident.alarmHstSeq}`} mono />
+                  <InfoRow label="알람 ID" value={incident.alarmId} mono />
+                </DetailSection>
+
+                <DetailSection title="서비스 정보">
+                  <InfoRow label="단위서비스" value={`${incident.serviceId} (${incident.serviceName})`} />
+                  {incident.applNm && <InfoRow label="APP명" value={incident.applNm} />}
+                  {incident.svcNm && <InfoRow label="서비스명" value={incident.svcNm} />}
+                  {incident.opNm && <InfoRow label="OP명" value={incident.opNm} />}
+                  {incident.chId && <InfoRow label="채널 ID" value={incident.chId} />}
+                  {incident.logPoint && <InfoRow label="로그 포인트" value={incident.logPoint} />}
+                </DetailSection>
+
+                <DetailSection title="알람 설정">
+                  <InfoRow label="알람명" value={incident.alarmName} />
+                  {incident.alarmDesc && <InfoRow label="알람 설명" value={incident.alarmDesc} />}
+                  {incident.alarmContent && <InfoRow label="알람 내용" value={incident.alarmContent} />}
+                  <InfoRow label="검출 유형" value={detectTypeLabels[incident.detectType] ?? incident.detectType} />
+                  <InfoRow label="탐지 주기" value={`${detectTermLabels[incident.detectTerm] ?? incident.detectTerm} 주기`} />
+                  <InfoRow label="임계값" value={`${incident.threshold.toLocaleString()}건`} />
+                  <InfoRow label="알람 등급" value={incident.severity} />
+                </DetailSection>
+
+                <DetailSection title="발생 정보">
+                  <InfoRow label="발생 시각" value={dayjs(incident.occurredAt).format('YYYY-MM-DD HH:mm:ss')} />
+                  <InfoRow label="발생 후 경과" value={dayjs(incident.occurredAt).fromNow()} />
+                  <InfoRow label="자동해소 여부" value={incident.clearYn ? '예' : '아니오'} />
+                  {incident.clearDt && <InfoRow label="해소 시각" value={dayjs(incident.clearDt).format('YYYY-MM-DD HH:mm:ss')} />}
+                  {typeof incident.changePercent === 'number' && incident.changePercent !== 0 && (
+                    <InfoRow label="변화율" value={`${incident.changePercent > 0 ? '+' : ''}${incident.changePercent}%`} />
+                  )}
+                </DetailSection>
+
+                {(incident.resolvedBy || incident.resolution) && (
+                  <DetailSection title="해결 이력">
+                    {incident.resolvedBy && <InfoRow label="처리자" value={incident.resolvedBy} />}
+                    {incident.resolvedAt && <InfoRow label="처리 시각" value={dayjs(incident.resolvedAt).format('YYYY-MM-DD HH:mm:ss')} />}
+                    {incident.resolution && (
+                      <Box sx={{ mt: 0.75, p: 1.25, borderRadius: 1, backgroundColor: '#10B98110', border: '1px solid #10B98130' }}>
+                        <Typography variant="caption" color="success.main" sx={{ fontSize: '0.72rem', lineHeight: 1.6 }}>
+                          {incident.resolution}
+                        </Typography>
+                      </Box>
+                    )}
+                  </DetailSection>
                 )}
-                {incident.mutedBy && (
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <VolumeOffIcon sx={{ fontSize: 14, color: '#F59E0B' }} />
-                    <Typography variant="caption" color="text.secondary">음소거: {incident.mutedBy} · {dayjs(incident.mutedUntil).format('HH:mm')}까지</Typography>
-                  </Box>
-                )}
-                {incident.resolvedBy && (
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <DoneAllIcon sx={{ fontSize: 14, color: '#10B981' }} />
-                    <Typography variant="caption" color="text.secondary">해결: {incident.resolvedBy} · {dayjs(incident.resolvedAt).format('HH:mm')}</Typography>
-                  </Box>
-                )}
-                {incident.resolution && (
-                  <Box sx={{ mt: 0.5, p: 1.5, borderRadius: 1, backgroundColor: '#10B98110', border: '1px solid #10B98130' }}>
-                    <Typography variant="caption" color="success.main">{incident.resolution}</Typography>
-                  </Box>
-                )}
+
               </Box>
 
-              <Divider sx={{ borderColor: 'rgba(255,255,255,0.06)', mb: 2 }} />
+              <Divider sx={{ borderColor: 'rgba(255,255,255,0.06)', flexShrink: 0 }} />
 
-              {/* 액션 버튼 */}
-              <Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1.5 }}>
-                  <TuneIcon sx={{ fontSize: 14, color: 'text.disabled' }} />
-                  <Typography variant="caption" color="text.disabled" fontWeight={600}
-                    sx={{ textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: '0.65rem' }}>
-                    인시던트 처리
-                  </Typography>
-                </Box>
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                  {isOpen && (
-                    <Button fullWidth variant="outlined" startIcon={<CheckIcon />}
-                      onClick={handleAck} disabled={acking} sx={{ justifyContent: 'flex-start' }}>
-                      확인 처리
-                    </Button>
-                  )}
-                  {incident.status !== 'muted' && (
-                    <Button fullWidth variant="outlined" startIcon={<VolumeOffIcon />}
-                      onClick={() => setMuteOpen(true)} color="warning" sx={{ justifyContent: 'flex-start' }}>
-                      알림 음소거
-                    </Button>
-                  )}
-                  {incident.status !== 'resolved' && (
-                    <Button fullWidth variant="outlined" startIcon={<DoneAllIcon />}
-                      onClick={() => setResolveOpen(true)} color="success" sx={{ justifyContent: 'flex-start' }}>
-                      해결 완료 처리
-                    </Button>
-                  )}
-                </Box>
+              {/* 하단 고정: 해결 완료 처리 */}
+              <Box sx={{ px: 3, py: 2, flexShrink: 0 }}>
+                {incident.status !== 'resolved' ? (
+                  <Button fullWidth variant="outlined" startIcon={<DoneAllIcon />}
+                    onClick={() => setResolveOpen(true)} color="success"
+                    sx={{ justifyContent: 'flex-start' }}>
+                    해결 완료 처리
+                  </Button>
+                ) : (
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, p: 1.5, borderRadius: 1.5, backgroundColor: '#10B98110', border: '1px solid #10B98130' }}>
+                    <DoneAllIcon sx={{ fontSize: 16, color: '#10B981' }} />
+                    <Typography variant="caption" color="success.main" fontWeight={600}>
+                      해결 완료된 인시던트입니다
+                    </Typography>
+                  </Box>
+                )}
               </Box>
             </Grid>
 
@@ -732,7 +747,6 @@ export default function IncidentDetailDrawer({ incident, onClose }: Props) {
         </DialogContent>
       </Dialog>
 
-      <MuteDialog open={muteOpen} onClose={() => setMuteOpen(false)} onConfirm={handleMute} isPending={muting} />
       <ResolveDialog open={resolveOpen} onClose={() => setResolveOpen(false)} onConfirm={handleResolve} isPending={resolving} />
     </>
   );
