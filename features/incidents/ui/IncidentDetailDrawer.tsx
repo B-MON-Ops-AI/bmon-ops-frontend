@@ -738,7 +738,14 @@ export default function IncidentDetailDrawer({ incident, onClose }: Props) {
         </DialogContent>
       </Dialog>
 
-      <ResolveDialog open={resolveOpen} onClose={() => setResolveOpen(false)} onConfirm={handleResolve} isPending={resolving} />
+      <ResolveDialog
+        open={resolveOpen}
+        onClose={() => setResolveOpen(false)}
+        onConfirm={handleResolve}
+        isPending={resolving}
+        recommendedActions={result?.recommendedActions}
+        isAnalysisLoading={analysisLoading || requesting}
+      />
     </>
   );
 }

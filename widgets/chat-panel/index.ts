@@ -4,3 +4,4 @@
  * @module widgets/chat-panel
  */
 export { default as ChatPanel } from './ui/ChatPanel';
+export { default as AdvisorPanel } from './ui/AdvisorPanel';

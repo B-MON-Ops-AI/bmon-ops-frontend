@@ -1,9 +1,11 @@
 'use client';
 
 import { useState, useMemo } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import Chip from '@mui/material/Chip';
+import Button from '@mui/material/Button';
 import MenuItem from '@mui/material/MenuItem';
 import Select from '@mui/material/Select';
 import TextField from '@mui/material/TextField';
@@ -17,12 +19,17 @@ import SearchIcon from '@mui/icons-material/Search';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
+import TrendingUpIcon from '@mui/icons-material/TrendingUp';
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
+import CancelOutlinedIcon from '@mui/icons-material/CancelOutlined';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import 'dayjs/locale/ko';
 import ReactMarkdown from 'react-markdown';
 import { useAlarmConditions } from '@/features/alarm-conditions';
 import { useSendChat } from '@/features/chat';
+import { advisorApi } from '@/features/advisor';
+import type { ThresholdSuggestion } from '@/features/advisor';
 import type { AlarmCondition, AlarmLevel, TriggerStatus } from '@/entities/alarm-condition';
 import AlarmConditionDetailDrawer from './AlarmConditionDetailDrawer';
 
@@ -190,35 +197,159 @@ function AiPanel({ loading, content }: { loading: boolean; content: string | nul
   );
 }
 
+// ── 임계값 조정 제안 인라인 ───────────────────────────────────
+
+function SuggestionInline({ suggestion }: { suggestion: ThresholdSuggestion }) {
+  const queryClient = useQueryClient();
+  const [acting, setActing] = useState(false);
+
+  const approveMutation = useMutation({
+    mutationFn: () => advisorApi.approve(suggestion.alarm_id),
+    onSettled: () => { setActing(false); queryClient.invalidateQueries({ queryKey: ['advisor-suggestions'] }); },
+  });
+  const rejectMutation = useMutation({
+    mutationFn: () => advisorApi.reject(suggestion.alarm_id),
+    onSettled: () => { setActing(false); queryClient.invalidateQueries({ queryKey: ['advisor-suggestions'] }); },
+  });
+
+  const isPending = suggestion.status === 'pending';
+  const increaseRatio = ((suggestion.suggested_threshold - suggestion.current_threshold) / suggestion.current_threshold * 100).toFixed(0);
+
+  return (
+    <Box sx={{
+      px: 3, py: 2,
+      borderTop: '1px solid rgba(99,102,241,0.12)',
+      backgroundColor: 'rgba(99,102,241,0.03)',
+      display: 'flex', flexDirection: 'column', gap: 1.25,
+    }}>
+      {/* 헤더 */}
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+          <TrendingUpIcon sx={{ fontSize: 13, color: '#818CF8' }} />
+          <Typography sx={{ fontSize: '0.7rem', fontWeight: 600, color: '#818CF8', letterSpacing: '0.04em' }}>
+            임계값 조정 제안
+          </Typography>
+        </Box>
+        {!isPending && (
+          <Chip
+            label={suggestion.status === 'approved' ? '✓ 승인됨' : '✗ 거절됨'}
+            size="small"
+            sx={{
+              height: 16, fontSize: '0.6rem',
+              backgroundColor: suggestion.status === 'approved' ? 'rgba(16,185,129,0.12)' : 'rgba(100,116,139,0.12)',
+              color: suggestion.status === 'approved' ? '#10B981' : '#64748B',
+              '& .MuiChip-label': { px: 0.75 },
+            }}
+          />
+        )}
+      </Box>
+
+      {/* 임계값 시각화 + 근거 */}
+      <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
+        {/* 현재 → 제안 */}
+        <Box sx={{
+          display: 'flex', alignItems: 'center', gap: 1,
+          backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 1.5, px: 1.5, py: 1, flexShrink: 0,
+        }}>
+          <Box sx={{ textAlign: 'center' }}>
+            <Typography sx={{ fontSize: '0.58rem', color: 'text.disabled' }}>현재</Typography>
+            <Typography sx={{ fontSize: '0.95rem', fontWeight: 700, color: 'text.secondary', lineHeight: 1.2 }}>
+              {suggestion.current_threshold.toLocaleString()}
+            </Typography>
+          </Box>
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.25 }}>
+            <TrendingUpIcon sx={{ fontSize: 13, color: '#818CF8' }} />
+            <Typography sx={{ fontSize: '0.6rem', color: '#818CF8', fontWeight: 700 }}>+{increaseRatio}%</Typography>
+          </Box>
+          <Box sx={{ textAlign: 'center' }}>
+            <Typography sx={{ fontSize: '0.58rem', color: 'text.disabled' }}>제안</Typography>
+            <Typography sx={{ fontSize: '0.95rem', fontWeight: 700, color: '#818CF8', lineHeight: 1.2 }}>
+              {suggestion.suggested_threshold.toLocaleString()}
+            </Typography>
+          </Box>
+        </Box>
+
+        {/* 근거 */}
+        <Box sx={{
+          flex: 1,
+          borderLeft: '2px solid rgba(99,102,241,0.3)',
+          pl: 1.25, py: 0.25,
+        }}>
+          <Typography sx={{ fontSize: '0.7rem', color: 'text.secondary', lineHeight: 1.6 }}>
+            {suggestion.rationale}
+          </Typography>
+        </Box>
+      </Box>
+
+      {/* 승인 / 거절 버튼 */}
+      {isPending && (
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          <Button
+            size="small" variant="outlined"
+            disabled={acting}
+            onClick={(e) => { e.stopPropagation(); setActing(true); rejectMutation.mutate(); }}
+            startIcon={<CancelOutlinedIcon sx={{ fontSize: '13px !important' }} />}
+            sx={{
+              fontSize: '0.7rem', py: 0.4, px: 1.5,
+              borderColor: 'rgba(255,255,255,0.12)', color: 'text.secondary',
+              '&:hover': { borderColor: '#EF4444', color: '#EF4444' },
+            }}
+          >
+            거절
+          </Button>
+          <Button
+            size="small" variant="contained"
+            disabled={acting}
+            onClick={(e) => { e.stopPropagation(); setActing(true); approveMutation.mutate(); }}
+            startIcon={acting ? <CircularProgress size={11} color="inherit" /> : <CheckCircleOutlineIcon sx={{ fontSize: '13px !important' }} />}
+            sx={{
+              fontSize: '0.7rem', py: 0.4, px: 1.5,
+              backgroundColor: '#6366F1', '&:hover': { backgroundColor: '#4F46E5' },
+            }}
+          >
+            승인 (DB 반영)
+          </Button>
+        </Box>
+      )}
+    </Box>
+  );
+}
+
 // ── 알람 카드 행 ──────────────────────────────────────────────
 
 interface CardRowProps {
   cond: AlarmCondition;
   aiLoading: boolean;
   aiContent: string | null;
+  suggestion: ThresholdSuggestion | null;
   onRequestAi: (cond: AlarmCondition) => void;
   onClick: () => void;
 }
 
-function AlarmConditionCard({ cond, aiLoading, aiContent, onRequestAi, onClick }: CardRowProps) {
+function AlarmConditionCard({ cond, aiLoading, aiContent, suggestion, onRequestAi, onClick }: CardRowProps) {
   const lc = LEVEL_CONFIG[cond.alarmLevel] ?? LEVEL_CONFIG['Minor'];
   const tc = TRIGGER_CONFIG[cond.triggerStatus] ?? TRIGGER_CONFIG['normal'];
   const isInactive = cond.useYn === 'N';
-  const canRequestAi = cond.triggerStatus === 'no-trigger' && cond.useYn === 'Y';
+  const canRequestAi = cond.useYn === 'Y';
   const aiOpen = aiLoading || !!aiContent;
+  const hasSuggestion = !!suggestion;
 
   return (
     <Box
       onClick={onClick}
       sx={{
-        backgroundColor: 'rgba(255,255,255,0.025)',
-        border: '1px solid rgba(255,255,255,0.07)',
+        backgroundColor: hasSuggestion ? 'rgba(99,102,241,0.05)' : 'rgba(255,255,255,0.025)',
+        border: hasSuggestion ? '1px solid rgba(99,102,241,0.3)' : '1px solid rgba(255,255,255,0.07)',
+        borderLeft: hasSuggestion ? '3px solid #6366F1' : '1px solid rgba(255,255,255,0.07)',
         borderRadius: 2,
         mb: 1,
         opacity: isInactive ? 0.55 : 1,
         transition: 'border-color 0.15s, background-color 0.15s',
         cursor: 'pointer',
-        '&:hover': { borderColor: 'rgba(255,255,255,0.14)', backgroundColor: 'rgba(255,255,255,0.045)' },
+        '&:hover': {
+          borderColor: hasSuggestion ? 'rgba(99,102,241,0.5)' : 'rgba(255,255,255,0.14)',
+          backgroundColor: hasSuggestion ? 'rgba(99,102,241,0.08)' : 'rgba(255,255,255,0.045)',
+        },
         overflow: 'hidden',
       }}
     >
@@ -240,11 +371,27 @@ function AlarmConditionCard({ cond, aiLoading, aiContent, onRequestAi, onClick }
 
         {/* 알람명 */}
         <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Tooltip title={cond.alarmName} placement="top-start">
-            <Typography sx={{ fontSize: '0.8rem', fontWeight: 500, color: 'text.primary', lineHeight: 1.4 }} noWrap>
-              {cond.alarmName}
-            </Typography>
-          </Tooltip>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+            <Tooltip title={cond.alarmName} placement="top-start">
+              <Typography sx={{ fontSize: '0.8rem', fontWeight: 500, color: 'text.primary', lineHeight: 1.4 }} noWrap>
+                {cond.alarmName}
+              </Typography>
+            </Tooltip>
+            {hasSuggestion && (
+              <Chip
+                label="AI 제안"
+                size="small"
+                icon={<AutoAwesomeIcon sx={{ fontSize: '10px !important', color: '#818CF8 !important' }} />}
+                sx={{
+                  height: 16, fontSize: '0.58rem', fontWeight: 700, flexShrink: 0,
+                  backgroundColor: 'rgba(99,102,241,0.15)', color: '#818CF8',
+                  border: '1px solid rgba(99,102,241,0.3)',
+                  '& .MuiChip-label': { px: 0.5 },
+                  '& .MuiChip-icon': { ml: 0.5 },
+                }}
+              />
+            )}
+          </Box>
           <Typography sx={{ fontSize: '0.65rem', color: 'text.disabled', lineHeight: 1.2 }}>
             {DETECT_TYPE_LABEL[cond.detectType] ?? cond.detectType} · {DETECT_TERM_LABEL[cond.detectTerm] ?? cond.detectTerm} · 임계 {cond.threshold.toLocaleString()}
           </Typography>
@@ -333,9 +480,10 @@ function AlarmConditionCard({ cond, aiLoading, aiContent, onRequestAi, onClick }
         </Box>
       </Box>
 
-      {/* AI 의견 패널 */}
-      <Collapse in={aiOpen} unmountOnExit>
-        <AiPanel loading={aiLoading} content={aiContent} />
+      {/* AI 의견 + 임계값 제안 패널 */}
+      <Collapse in={aiOpen || hasSuggestion} unmountOnExit>
+        {aiOpen && <AiPanel loading={aiLoading} content={aiContent} />}
+        {suggestion && <SuggestionInline suggestion={suggestion} />}
       </Collapse>
     </Box>
   );
@@ -389,6 +537,15 @@ function ColumnHeaders({ sortKey, sortDir, onSort }: {
 export default function AlarmConditionsTab() {
   const { data, isLoading } = useAlarmConditions();
   const { mutate: sendChat } = useSendChat();
+  const { data: advisorData } = useQuery({
+    queryKey: ['advisor-suggestions'],
+    queryFn: advisorApi.getSuggestions,
+    staleTime: 60_000,
+  });
+  const suggestionMap = useMemo(
+    () => new Map((advisorData?.suggestions ?? []).map((s) => [s.alarm_id, s])),
+    [advisorData],
+  );
 
   const [search, setSearch] = useState('');
   const [serviceFilter, setServiceFilter] = useState('all');
@@ -424,8 +581,17 @@ export default function AlarmConditionsTab() {
     else { setSortKey(key); setSortDir('desc'); }
   };
 
+  const AI_QUESTION: Record<string, string> = {
+    'no-trigger': '이 알람이 최근 30일간 한 번도 발생하지 않았습니다. 원인 추정과 임계값 검토 방안을 제안해주세요.',
+    'normal':     '이 알람은 정상 범위 내에서 발생하고 있습니다. 현황을 분석하고 지속 관리를 위한 방안을 제안해주세요.',
+    'frequent':   `이 알람이 최근 30일간 ${'{count}'}건 발생하며 빈발 상태입니다. 원인 분석과 임계값 조정 방안을 제안해주세요.`,
+    'excessive':  `이 알람이 최근 30일간 ${'{count}'}건 과다 발생하고 있습니다. 노이즈 알람 여부를 판단하고 조치 방안을 제안해주세요.`,
+  };
+
   const handleRequestAi = (cond: AlarmCondition) => {
     setAiState((prev) => ({ ...prev, [cond.alarmId]: { loading: true, content: null } }));
+    const questionTemplate = AI_QUESTION[cond.triggerStatus] ?? AI_QUESTION['normal'];
+    const question = questionTemplate.replace('{count}', cond.triggerCount30d.toLocaleString());
     const query = [
       '[알람조건분석]',
       `서비스: ${cond.serviceName}(${cond.serviceId})`,
@@ -433,7 +599,8 @@ export default function AlarmConditionsTab() {
       `등급: ${cond.alarmLevel}`,
       `검출유형: ${cond.detectType}(${DETECT_TYPE_LABEL[cond.detectType] ?? cond.detectType})`,
       `임계값: ${cond.threshold.toLocaleString()}건/${DETECT_TERM_LABEL[cond.detectTerm] ?? cond.detectTerm}`,
-      '이 알람이 최근 30일간 한 번도 발생하지 않았습니다. 원인 추정과 개선 방안을 제안해주세요.',
+      `30일 발생: ${cond.triggerCount30d}건 (${TRIGGER_CONFIG[cond.triggerStatus]?.label ?? cond.triggerStatus})`,
+      question,
     ].join(' | ');
 
     sendChat(
@@ -563,6 +730,7 @@ export default function AlarmConditionsTab() {
               cond={cond}
               aiLoading={!!ai?.loading}
               aiContent={ai?.content ?? null}
+              suggestion={suggestionMap.get(cond.alarmId) ?? null}
               onRequestAi={handleRequestAi}
               onClick={() => setSelectedCond(cond)}
             />

@@ -456,7 +456,12 @@ export default function OverviewTab() {
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                    <XAxis dataKey="date" tick={{ fill: C.muted, fontSize: 11 }} />
+                    <XAxis
+                      dataKey="date"
+                      tick={{ fill: C.muted, fontSize: 10 }}
+                      interval={Math.max(0, Math.floor(dailyTrend.length / 8))}
+                      tickFormatter={(v: string) => (typeof v === 'string' && v.length >= 10 ? v.slice(5) : v)}
+                    />
                     <YAxis tick={{ fill: C.muted, fontSize: 11 }} allowDecimals={false} domain={[0, (dataMax: number) => Math.max(dataMax, 5)]} />
                     <Tooltip content={<DarkTooltip />} />
                     <Legend

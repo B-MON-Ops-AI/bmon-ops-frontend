@@ -3,7 +3,6 @@
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Badge from "@mui/material/Badge";
-import DashboardIcon from "@mui/icons-material/Dashboard";
 import GridViewIcon from "@mui/icons-material/GridView";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import DashboardCustomizeIcon from "@mui/icons-material/DashboardCustomize";
@@ -15,12 +14,6 @@ import { useAppDispatch, toggleChatPanel } from "@/shared/store";
 import { useCriticalCheck } from "@/features/incidents";
 
 export const SIDEBAR_WIDTH = 200;
-
-const dashTabs = [
-  { href: "/dashboard/overall", icon: <GridViewIcon sx={{ fontSize: 13 }} />, label: "OverAll" },
-  { href: "/dashboard/incident-wall", icon: <WarningAmberIcon sx={{ fontSize: 13 }} />, label: "인시던트 Wall" },
-  { href: "/dashboard/custom-wall", icon: <DashboardCustomizeIcon sx={{ fontSize: 13 }} />, label: "커스텀 Wall" },
-];
 
 const navItemSx = (active: boolean) => ({
   display: "flex",
@@ -46,14 +39,28 @@ const navItemSx = (active: boolean) => ({
   },
 });
 
+const SectionLabel = ({ label }: { label: string }) => (
+  <Typography
+    sx={{
+      fontSize: "0.6rem",
+      fontWeight: 700,
+      color: "rgba(255,255,255,0.25)",
+      letterSpacing: "0.08em",
+      textTransform: "uppercase",
+      px: 2.25,
+      pt: 1.5,
+      pb: 0.5,
+    }}
+  >
+    {label}
+  </Typography>
+);
+
 export default function AppSidebar() {
   const dispatch = useAppDispatch();
   const pathname = usePathname();
   const { data: criticalData } = useCriticalCheck();
   const criticalCount = criticalData?.criticalCount ?? 0;
-
-  const isDashboard = pathname.startsWith("/dashboard");
-  const isAlarmConditions = pathname === "/dashboard/alarm-conditions";
 
   return (
     <Box
@@ -85,118 +92,73 @@ export default function AppSidebar() {
       >
         <Typography
           fontWeight={800}
-          sx={{
-            color: "#A5B4FC",
-            fontSize: "0.95rem",
-            letterSpacing: "-0.01em",
-          }}
+          sx={{ color: "#A5B4FC", fontSize: "0.82rem", letterSpacing: "-0.01em" }}
         >
-          Ops AI
+          BMON AI Agent
         </Typography>
       </Box>
 
-      <Box
-        sx={{
-          height: "1px",
-          backgroundColor: "rgba(255,255,255,0.07)",
-          mx: 1.5,
-          mb: 1,
-        }}
-      />
+      <Box sx={{ height: "1px", backgroundColor: "rgba(255,255,255,0.07)", mx: 1.5, mb: 1 }} />
 
       {/* 네비게이션 */}
       <Box sx={{ flex: 1, overflowY: "auto", py: 0.5 }}>
+
         {/* 대시보드 */}
+        <SectionLabel label="대시보드" />
+
         <Box
           component={Link}
           href="/dashboard/overall"
-          sx={navItemSx(isDashboard && !isAlarmConditions)}
+          sx={navItemSx(pathname === "/dashboard/overall")}
+        >
+          <GridViewIcon sx={{ fontSize: 15 }} />
+          <span>Overall</span>
+        </Box>
+
+        <Box
+          component={Link}
+          href="/dashboard/incident-wall"
+          sx={navItemSx(pathname === "/dashboard/incident-wall")}
         >
           <Badge
             badgeContent={criticalCount}
             color="error"
             max={99}
-            sx={{
-              "& .MuiBadge-badge": {
-                fontSize: "0.5rem",
-                minWidth: 13,
-                height: 13,
-                padding: "0 3px",
-              },
-            }}
+            sx={{ "& .MuiBadge-badge": { fontSize: "0.5rem", minWidth: 13, height: 13, padding: "0 3px" } }}
           >
-            <DashboardIcon sx={{ fontSize: 15 }} />
+            <WarningAmberIcon sx={{ fontSize: 15 }} />
           </Badge>
-          <span>대시보드</span>
+          <span>인시던트 Wall</span>
         </Box>
 
-        {/* 대시보드 서브탭 */}
-        {isDashboard && !isAlarmConditions && (
-          <Box sx={{ mt: 0.25, mb: 0.5 }}>
-            {dashTabs.map((t) => {
-              const sel = pathname === t.href;
-              const showBadge = t.href === "/dashboard/incident-wall" && criticalCount > 0;
-              return (
-                <Box
-                  key={t.href}
-                  component={Link}
-                  href={t.href}
-                  sx={{
-                    ...navItemSx(sel),
-                    pl: 3.5,
-                    py: 0.875,
-                    fontSize: "0.85rem",
-                  }}
-                >
-                  {showBadge ? (
-                    <Badge
-                      badgeContent={criticalCount}
-                      color="error"
-                      max={99}
-                      sx={{
-                        "& .MuiBadge-badge": {
-                          fontSize: "0.5rem",
-                          minWidth: 13,
-                          height: 13,
-                          padding: "0 3px",
-                          top: -2,
-                          right: -2,
-                        },
-                      }}
-                    >
-                      {t.icon}
-                    </Badge>
-                  ) : (
-                    t.icon
-                  )}
-                  <Typography
-                    component="span"
-                    sx={{
-                      fontSize: "inherit",
-                      fontWeight: "inherit",
-                      lineHeight: 1,
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {t.label}
-                  </Typography>
-                </Box>
-              );
-            })}
-          </Box>
-        )}
+        <Box
+          component={Link}
+          href="/dashboard/custom-wall"
+          sx={navItemSx(pathname === "/dashboard/custom-wall")}
+        >
+          <DashboardCustomizeIcon sx={{ fontSize: 15 }} />
+          <span>커스텀 Wall</span>
+        </Box>
 
-        {/* 알람 조건 현황 */}
+        <Box sx={{ height: "1px", backgroundColor: "rgba(255,255,255,0.06)", mx: 1.5, my: 1 }} />
+
+        {/* 관리 */}
+        <SectionLabel label="관리" />
+
         <Box
           component={Link}
           href="/dashboard/alarm-conditions"
-          sx={navItemSx(isAlarmConditions)}
+          sx={navItemSx(pathname === "/dashboard/alarm-conditions")}
         >
           <NotificationsNoneIcon sx={{ fontSize: 15 }} />
           <span>알람 조건</span>
         </Box>
 
-        {/* AI 어시스턴트 */}
+        <Box sx={{ height: "1px", backgroundColor: "rgba(255,255,255,0.06)", mx: 1.5, my: 1 }} />
+
+        {/* 도구 */}
+        <SectionLabel label="도구" />
+
         <Box onClick={() => dispatch(toggleChatPanel())} sx={navItemSx(false)}>
           <ChatBubbleIcon sx={{ fontSize: 15 }} />
           <span>AI 어시스턴트</span>

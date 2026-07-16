@@ -1,11 +1,5 @@
 'use client';
 
-/**
- * @file ChatPanel.tsx
- * @description AI 어시스턴트 채팅 사이드 패널
- * @module widgets/chat-panel/ui
- */
-
 import { useState, useRef, useEffect } from 'react';
 import Drawer from '@mui/material/Drawer';
 import Box from '@mui/material/Box';
@@ -72,7 +66,6 @@ export default function ChatPanel() {
       { id: `user-${Date.now()}`, role: 'user', content: query, createdAt: new Date().toISOString() },
     ]);
 
-    // nav 바 일반 채팅은 "general" 세션을 사용 (incident 채팅과 컨텍스트 분리)
     sendChat(
       { query, session_id: 'general' },
       {
@@ -117,7 +110,8 @@ export default function ChatPanel() {
         },
       }}
     >
-      <Box sx={{ px: 2, py: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      {/* 패널 헤더 */}
+      <Box sx={{ px: 2, py: 1.25, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <Typography variant="subtitle1" fontWeight={600}>
           AI 어시스턴트
         </Typography>
@@ -127,75 +121,78 @@ export default function ChatPanel() {
       </Box>
       <Divider />
 
-      <Box sx={{ flex: 1, overflowY: 'auto', p: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
-        {localMessages.length === 0 && (
-          <Typography variant="body2" color="text.disabled" textAlign="center" mt={4}>
-            인프라 상태나 인시던트에 대해 질문하세요.
-          </Typography>
-        )}
-        {localMessages.map((msg) => (
-          <Box
-            key={msg.id}
-            sx={{ display: 'flex', flexDirection: 'column', alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start' }}
-          >
-            <Box
-              sx={{
-                maxWidth: '85%',
-                px: 2,
-                py: 1.5,
-                borderRadius: msg.role === 'user' ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
-                backgroundColor: msg.role === 'user' ? 'primary.main' : '#374151',
-                color: 'text.primary',
-                fontSize: '0.875rem',
-                '& p': { m: 0 },
-                '& pre': { overflow: 'auto', fontSize: '0.8rem' },
-                '& ul, & ol': { pl: 2, my: 0.5 },
+      {/* 채팅 영역 */}
+      <>
+        <Box sx={{ flex: 1, overflowY: 'auto', p: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {localMessages.length === 0 && (
+              <Typography variant="body2" color="text.disabled" textAlign="center" mt={4}>
+                인프라 상태나 인시던트에 대해 질문하세요.
+              </Typography>
+            )}
+            {localMessages.map((msg) => (
+              <Box
+                key={msg.id}
+                sx={{ display: 'flex', flexDirection: 'column', alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start' }}
+              >
+                <Box
+                  sx={{
+                    maxWidth: '85%',
+                    px: 2,
+                    py: 1.5,
+                    borderRadius: msg.role === 'user' ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
+                    backgroundColor: msg.role === 'user' ? 'primary.main' : '#374151',
+                    color: 'text.primary',
+                    fontSize: '0.875rem',
+                    '& p': { m: 0 },
+                    '& pre': { overflow: 'auto', fontSize: '0.8rem' },
+                    '& ul, & ol': { pl: 2, my: 0.5 },
+                  }}
+                >
+                  {msg.role === 'assistant' ? (
+                    <ReactMarkdown>{msg.content}</ReactMarkdown>
+                  ) : (
+                    <Typography variant="body2">{msg.content}</Typography>
+                  )}
+                </Box>
+                <Typography variant="caption" color="text.disabled" sx={{ mt: 0.5, px: 1 }}>
+                  {dayjs(msg.createdAt).format('HH:mm')}
+                </Typography>
+              </Box>
+            ))}
+            {isPending && (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <CircularProgress size={16} />
+                <Typography variant="body2" color="text.secondary">분석 중...</Typography>
+              </Box>
+            )}
+            <div ref={bottomRef} />
+          </Box>
+
+          <Divider />
+
+          <Box sx={{ p: 2 }}>
+            <TextField
+              fullWidth
+              multiline
+              maxRows={4}
+              placeholder="메시지를 입력하세요... (Enter로 전송)"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              disabled={isPending}
+              size="small"
+              InputProps={{
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton size="small" onClick={handleSend} disabled={!input.trim() || isPending} color="primary">
+                      <SendIcon fontSize="small" />
+                    </IconButton>
+                  </InputAdornment>
+                ),
               }}
-            >
-              {msg.role === 'assistant' ? (
-                <ReactMarkdown>{msg.content}</ReactMarkdown>
-              ) : (
-                <Typography variant="body2">{msg.content}</Typography>
-              )}
-            </Box>
-            <Typography variant="caption" color="text.disabled" sx={{ mt: 0.5, px: 1 }}>
-              {dayjs(msg.createdAt).format('HH:mm')}
-            </Typography>
+            />
           </Box>
-        ))}
-        {isPending && (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <CircularProgress size={16} />
-            <Typography variant="body2" color="text.secondary">분석 중...</Typography>
-          </Box>
-        )}
-        <div ref={bottomRef} />
-      </Box>
-
-      <Divider />
-
-      <Box sx={{ p: 2 }}>
-        <TextField
-          fullWidth
-          multiline
-          maxRows={4}
-          placeholder="메시지를 입력하세요... (Enter로 전송)"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          disabled={isPending}
-          size="small"
-          InputProps={{
-            endAdornment: (
-              <InputAdornment position="end">
-                <IconButton size="small" onClick={handleSend} disabled={!input.trim() || isPending} color="primary">
-                  <SendIcon fontSize="small" />
-                </IconButton>
-              </InputAdornment>
-            ),
-          }}
-        />
-      </Box>
+      </>
     </Drawer>
   );
 }

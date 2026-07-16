@@ -7,8 +7,10 @@ import type { AxiosInstance, InternalAxiosRequestConfig } from 'axios';
 import {
   MOCK_WIDGETS, MOCK_METRICS, MOCK_INCIDENTS, MOCK_CRITICAL_CHECK,
   MOCK_AI_ANALYSIS, MOCK_CHAT_HISTORY, getMockDashboardSummary, MOCK_HOURLY_TREND,
-  MOCK_SERVICE_STATUSES, MOCK_ALARM_CONDITIONS,
+  MOCK_SERVICE_STATUSES, MOCK_ALARM_CONDITIONS, MOCK_ADVISOR_SUGGESTIONS,
 } from '@/shared/api/mock/data';
+
+const mockAdvisorState = JSON.parse(JSON.stringify(MOCK_ADVISOR_SUGGESTIONS));
 
 function delay(ms = 250) {
   return new Promise((r) => setTimeout(r, ms));
@@ -201,6 +203,44 @@ function getMockData(
         answer: { summary },
         createdAt: new Date().toISOString(),
       };
+    }
+  }
+
+  if (serviceName === 'ai') {
+    if (method === 'get' && url === '/advisor/suggestions') {
+      mockAdvisorState.pendingCount = mockAdvisorState.suggestions.filter((s: { status: string }) => s.status === 'pending').length;
+      return { ...mockAdvisorState };
+    }
+    if (method === 'post' && url === '/advisor/analyze') {
+      mockAdvisorState.lastAnalyzedAt = new Date().toISOString();
+      const pending = mockAdvisorState.suggestions.filter((s: { status: string }) => s.status === 'pending').length;
+      return { success: true, message: `분석 완료: ${pending}개의 제안이 있습니다.`, pendingCount: pending };
+    }
+    if (method === 'post' && url.includes('/advisor/suggestions/') && url.endsWith('/approve')) {
+      const alarmId = url.split('/advisor/suggestions/')[1].replace('/approve', '');
+      const suggestion = mockAdvisorState.suggestions.find((s: { alarm_id: string }) => s.alarm_id === alarmId);
+      if (suggestion) {
+        suggestion.status = 'approved';
+        suggestion.approved_at = new Date().toISOString();
+        return {
+          success: true,
+          message: `alarm_id ${alarmId} 임계값이 ${suggestion.current_threshold} → ${suggestion.suggested_threshold}으로 변경됐습니다.`,
+          alarmId,
+          previousThreshold: suggestion.current_threshold,
+          newThreshold: suggestion.suggested_threshold,
+        };
+      }
+      return { success: false, message: '제안을 찾을 수 없습니다.' };
+    }
+    if (method === 'post' && url.includes('/advisor/suggestions/') && url.endsWith('/reject')) {
+      const alarmId = url.split('/advisor/suggestions/')[1].replace('/reject', '');
+      const suggestion = mockAdvisorState.suggestions.find((s: { alarm_id: string }) => s.alarm_id === alarmId);
+      if (suggestion) {
+        suggestion.status = 'rejected';
+        suggestion.rejected_at = new Date().toISOString();
+        return { success: true, message: `alarm_id ${alarmId} 제안을 거절했습니다.` };
+      }
+      return { success: false, message: '제안을 찾을 수 없습니다.' };
     }
   }
 
