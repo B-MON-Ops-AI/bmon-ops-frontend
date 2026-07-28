@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import Dialog from '@mui/material/Dialog';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
@@ -8,13 +9,20 @@ import Divider from '@mui/material/Divider';
 import IconButton from '@mui/material/IconButton';
 import CircularProgress from '@mui/material/CircularProgress';
 import Tooltip from '@mui/material/Tooltip';
+import TextField from '@mui/material/TextField';
+import Select from '@mui/material/Select';
+import MenuItem from '@mui/material/MenuItem';
+import Button from '@mui/material/Button';
 import CloseIcon from '@mui/icons-material/Close';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
+import EditIcon from '@mui/icons-material/Edit';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import 'dayjs/locale/ko';
 import ReactMarkdown from 'react-markdown';
-import type { AlarmCondition, AlarmLevel, TriggerStatus } from '@/entities/alarm-condition';
+import { useUpdateAlarmCondition } from '@/features/alarm-conditions';
+import { useAppDispatch, showSnackbar } from '@/shared/store';
+import type { AlarmCondition, AlarmLevel, DetectTerm, TriggerStatus } from '@/entities/alarm-condition';
 
 dayjs.extend(relativeTime);
 dayjs.locale('ko');
@@ -114,12 +122,62 @@ interface Props {
   onRequestAi: (cond: AlarmCondition) => void;
 }
 
+const DETECT_TERM_OPTIONS: DetectTerm[] = ['MIN1', 'MIN5', 'MIN10', 'MIN30', 'HOUR1', 'DAY1'];
+
 export default function AlarmConditionDetailDrawer({ cond, onClose, aiLoading, aiContent, onRequestAi }: Props) {
+  const dispatch = useAppDispatch();
+  const { mutate: updateCond, isPending: saving } = useUpdateAlarmCondition();
+
+  const [editing, setEditing] = useState(false);
+  const [editThrs, setEditThrs] = useState('');
+  const [editTerm, setEditTerm] = useState<DetectTerm>('MIN5');
+  const [editUseYn, setEditUseYn] = useState<'Y' | 'N'>('Y');
+  const [disposer, setDisposer] = useState('');
+  // 저장 후 부모 cond가 갱신되기 전까지 표시값을 즉시 반영하기 위한 로컬 오버라이드
+  const [override, setOverride] = useState<{ threshold: number; detectTerm: DetectTerm; useYn: 'Y' | 'N' } | null>(null);
+  // 조건 변경 시 편집/오버라이드 초기화는 부모의 key={alarmId} 리마운트로 처리
+
   if (!cond) return null;
+
+  // 표시값: 편집 저장 후에는 override 우선
+  const viewThreshold = override?.threshold ?? cond.threshold;
+  const viewTerm = override?.detectTerm ?? cond.detectTerm;
+  const viewUseYn = override?.useYn ?? cond.useYn;
 
   const lc = LEVEL_CONFIG[cond.alarmLevel] ?? LEVEL_CONFIG['Minor'];
   const tc = TRIGGER_CONFIG[cond.triggerStatus] ?? TRIGGER_CONFIG['normal'];
-  const canRequestAi = cond.triggerStatus === 'no-trigger' && cond.useYn === 'Y';
+  const canRequestAi = cond.triggerStatus === 'no-trigger' && viewUseYn === 'Y';
+
+  const startEdit = () => {
+    setEditThrs(String(viewThreshold));
+    setEditTerm(viewTerm as DetectTerm);
+    setEditUseYn(viewUseYn);
+    setDisposer('');
+    setEditing(true);
+  };
+
+  const handleSave = () => {
+    const thrsNum = Number(editThrs);
+    if (!Number.isFinite(thrsNum) || thrsNum <= 0) {
+      dispatch(showSnackbar({ message: '임계값은 0보다 큰 숫자여야 합니다.', severity: 'error' }));
+      return;
+    }
+    if (!disposer.trim()) {
+      dispatch(showSnackbar({ message: '처리자 사번을 입력하세요.', severity: 'error' }));
+      return;
+    }
+    updateCond(
+      { alarmId: cond.alarmId, data: { thrs: thrsNum, detectTerm: editTerm, useYn: editUseYn, chgrId: disposer.trim() } },
+      {
+        onSuccess: () => {
+          setOverride({ threshold: thrsNum, detectTerm: editTerm, useYn: editUseYn });
+          setEditing(false);
+          dispatch(showSnackbar({ message: '알람조건 설정이 변경됐습니다.', severity: 'success' }));
+        },
+        onError: () => dispatch(showSnackbar({ message: '변경에 실패했습니다.', severity: 'error' })),
+      },
+    );
+  };
 
   const countColor = cond.triggerCount30d > 30 ? '#F87171'
     : cond.triggerCount30d > 10 ? '#FB923C'
@@ -236,8 +294,21 @@ export default function AlarmConditionDetailDrawer({ cond, onClose, aiLoading, a
 
           {/* 조건 설정 */}
           <Box>
-            <SectionTitle>조건 설정</SectionTitle>
-            <Box sx={{ borderRadius: 1.5, border: '1px solid rgba(255,255,255,0.07)', px: 1.75, py: 0.5 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.75 }}>
+              <SectionTitle>조건 설정</SectionTitle>
+              {!editing && (
+                <Tooltip title="임계값·검출주기·사용여부 편집" placement="left">
+                  <IconButton
+                    size="small"
+                    onClick={startEdit}
+                    sx={{ p: 0.4, color: '#818CF8', backgroundColor: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 1, '&:hover': { backgroundColor: 'rgba(99,102,241,0.16)' } }}
+                  >
+                    <EditIcon sx={{ fontSize: 14 }} />
+                  </IconButton>
+                </Tooltip>
+              )}
+            </Box>
+            <Box sx={{ borderRadius: 1.5, border: `1px solid ${editing ? 'rgba(99,102,241,0.3)' : 'rgba(255,255,255,0.07)'}`, px: 1.75, py: 0.5 }}>
               <InfoRow label="검출 유형">
                 <Typography sx={{ fontSize: '0.78rem', color: 'text.primary' }}>
                   {DETECT_TYPE_LABEL[cond.detectType] ?? cond.detectType}
@@ -245,23 +316,49 @@ export default function AlarmConditionDetailDrawer({ cond, onClose, aiLoading, a
               </InfoRow>
               <Divider sx={{ borderColor: 'rgba(255,255,255,0.04)' }} />
               <InfoRow label="검출 주기">
-                <Typography sx={{ fontSize: '0.78rem', color: 'text.primary' }}>
-                  {DETECT_TERM_LABEL[cond.detectTerm] ?? cond.detectTerm}
-                </Typography>
+                {editing ? (
+                  <Select
+                    value={editTerm}
+                    onChange={(e) => setEditTerm(e.target.value as DetectTerm)}
+                    size="small"
+                    sx={{ fontSize: '0.78rem', height: 30, minWidth: 110, '& .MuiSelect-select': { py: 0.25 } }}
+                  >
+                    {DETECT_TERM_OPTIONS.map((t) => (
+                      <MenuItem key={t} value={t} sx={{ fontSize: '0.78rem' }}>
+                        {DETECT_TERM_LABEL[t] ?? t}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                ) : (
+                  <Typography sx={{ fontSize: '0.78rem', color: 'text.primary' }}>
+                    {DETECT_TERM_LABEL[viewTerm] ?? viewTerm}
+                  </Typography>
+                )}
               </InfoRow>
               <Divider sx={{ borderColor: 'rgba(255,255,255,0.04)' }} />
               <InfoRow label="임계값">
-                <Typography sx={{ fontSize: '0.78rem', color: 'text.primary', fontWeight: 600 }}>
-                  {cond.threshold.toLocaleString()}
-                  <Typography component="span" sx={{ fontSize: '0.65rem', color: 'text.disabled', ml: 0.5 }}>
-                    / {DETECT_TERM_LABEL[cond.detectTerm] ?? cond.detectTerm}
-                  </Typography>
-                  {cond.comprType && (
-                    <Typography component="span" sx={{ fontSize: '0.65rem', color: 'text.disabled', ml: 0.75 }}>
-                      ({COMPR_LABEL[cond.comprType]})
+                {editing ? (
+                  <TextField
+                    value={editThrs}
+                    onChange={(e) => setEditThrs(e.target.value.replace(/[^0-9.]/g, ''))}
+                    size="small"
+                    inputMode="decimal"
+                    placeholder="0"
+                    sx={{ width: 120, '& .MuiInputBase-input': { py: 0.5, fontSize: '0.78rem' } }}
+                  />
+                ) : (
+                  <Typography sx={{ fontSize: '0.78rem', color: 'text.primary', fontWeight: 600 }}>
+                    {viewThreshold.toLocaleString()}
+                    <Typography component="span" sx={{ fontSize: '0.65rem', color: 'text.disabled', ml: 0.5 }}>
+                      / {DETECT_TERM_LABEL[viewTerm] ?? viewTerm}
                     </Typography>
-                  )}
-                </Typography>
+                    {cond.comprType && (
+                      <Typography component="span" sx={{ fontSize: '0.65rem', color: 'text.disabled', ml: 0.75 }}>
+                        ({COMPR_LABEL[cond.comprType]})
+                      </Typography>
+                    )}
+                  </Typography>
+                )}
               </InfoRow>
               <Divider sx={{ borderColor: 'rgba(255,255,255,0.04)' }} />
               <InfoRow label="검출 요일">
@@ -292,17 +389,29 @@ export default function AlarmConditionDetailDrawer({ cond, onClose, aiLoading, a
               </InfoRow>
               <Divider sx={{ borderColor: 'rgba(255,255,255,0.04)' }} />
               <InfoRow label="활성 여부">
-                <Chip
-                  label={cond.useYn === 'Y' ? '활성' : '비활성'}
-                  size="small"
-                  sx={{
-                    height: 18, fontSize: '0.62rem', fontWeight: 600,
-                    backgroundColor: cond.useYn === 'Y' ? 'rgba(52,211,153,0.1)' : 'rgba(148,163,184,0.08)',
-                    color: cond.useYn === 'Y' ? '#34D399' : '#64748B',
-                    border: `1px solid ${cond.useYn === 'Y' ? 'rgba(52,211,153,0.25)' : 'rgba(148,163,184,0.15)'}`,
-                    '& .MuiChip-label': { px: 0.75 },
-                  }}
-                />
+                {editing ? (
+                  <Select
+                    value={editUseYn}
+                    onChange={(e) => setEditUseYn(e.target.value as 'Y' | 'N')}
+                    size="small"
+                    sx={{ fontSize: '0.78rem', height: 30, minWidth: 100, '& .MuiSelect-select': { py: 0.25 } }}
+                  >
+                    <MenuItem value="Y" sx={{ fontSize: '0.78rem' }}>활성</MenuItem>
+                    <MenuItem value="N" sx={{ fontSize: '0.78rem' }}>비활성</MenuItem>
+                  </Select>
+                ) : (
+                  <Chip
+                    label={viewUseYn === 'Y' ? '활성' : '비활성'}
+                    size="small"
+                    sx={{
+                      height: 18, fontSize: '0.62rem', fontWeight: 600,
+                      backgroundColor: viewUseYn === 'Y' ? 'rgba(52,211,153,0.1)' : 'rgba(148,163,184,0.08)',
+                      color: viewUseYn === 'Y' ? '#34D399' : '#64748B',
+                      border: `1px solid ${viewUseYn === 'Y' ? 'rgba(52,211,153,0.25)' : 'rgba(148,163,184,0.15)'}`,
+                      '& .MuiChip-label': { px: 0.75 },
+                    }}
+                  />
+                )}
               </InfoRow>
               <Divider sx={{ borderColor: 'rgba(255,255,255,0.04)' }} />
               <InfoRow label="최근 발생">
@@ -310,7 +419,45 @@ export default function AlarmConditionDetailDrawer({ cond, onClose, aiLoading, a
                   {cond.latestTriggerAt ? dayjs(cond.latestTriggerAt).fromNow() : '—'}
                 </Typography>
               </InfoRow>
+
+              {editing && (
+                <>
+                  <Divider sx={{ borderColor: 'rgba(255,255,255,0.04)' }} />
+                  <InfoRow label="처리자 사번">
+                    <TextField
+                      value={disposer}
+                      onChange={(e) => setDisposer(e.target.value)}
+                      size="small"
+                      placeholder="예: 82000001"
+                      sx={{ width: 160, '& .MuiInputBase-input': { py: 0.5, fontSize: '0.78rem' } }}
+                    />
+                  </InfoRow>
+                </>
+              )}
             </Box>
+
+            {editing && (
+              <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 1.25 }}>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={() => setEditing(false)}
+                  disabled={saving}
+                  sx={{ minWidth: 64, fontSize: '0.72rem' }}
+                >
+                  취소
+                </Button>
+                <Button
+                  size="small"
+                  variant="contained"
+                  onClick={handleSave}
+                  disabled={saving}
+                  sx={{ minWidth: 72, fontSize: '0.72rem' }}
+                >
+                  {saving ? <CircularProgress size={14} sx={{ color: '#fff' }} /> : '저장'}
+                </Button>
+              </Box>
+            )}
           </Box>
 
           {/* 관리 이력 */}

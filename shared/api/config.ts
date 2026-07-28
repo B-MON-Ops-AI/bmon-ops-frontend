@@ -5,13 +5,10 @@
  */
 type RuntimeConfig = {
   API_GROUP: string;
-  AUTH_HOST: string;
   DASHBOARD_HOST: string;
   INCIDENT_HOST: string;
   AI_HOST: string;
   CHAT_HOST: string;
-  SETTINGS_HOST: string;
-  MOCK_MODE?: boolean;
 };
 
 declare global {
@@ -26,28 +23,17 @@ function getConfig(): RuntimeConfig {
   }
   return {
     API_GROUP: process.env.NEXT_PUBLIC_API_GROUP ?? '/api/v1',
-    AUTH_HOST: process.env.NEXT_PUBLIC_AUTH_API_URL ?? 'http://localhost:8081',
     DASHBOARD_HOST: process.env.NEXT_PUBLIC_DASHBOARD_API_URL ?? 'http://localhost:8082',
     INCIDENT_HOST: process.env.NEXT_PUBLIC_INCIDENT_API_URL ?? 'http://localhost:8083',
     AI_HOST: process.env.NEXT_PUBLIC_AI_API_URL ?? 'http://localhost:8084',
     CHAT_HOST: process.env.NEXT_PUBLIC_CHAT_API_URL ?? 'http://localhost:8085',
-    SETTINGS_HOST: process.env.NEXT_PUBLIC_SETTINGS_API_URL ?? 'http://localhost:8086',
   };
 }
 
-export function isMockMode(): boolean {
-  if (typeof window !== 'undefined' && window.__runtime_config__?.MOCK_MODE !== undefined) {
-    return window.__runtime_config__.MOCK_MODE === true;
-  }
-  return process.env.NEXT_PUBLIC_MOCK_MODE === 'true';
-}
-
 export const API_CONFIG = {
-  get AUTH_URL() { return `${getConfig().AUTH_HOST}${getConfig().API_GROUP}`; },
   get DASHBOARD_URL() { return `${getConfig().DASHBOARD_HOST}${getConfig().API_GROUP}`; },
   get INCIDENT_URL() { return `${getConfig().INCIDENT_HOST}${getConfig().API_GROUP}`; },
   get AI_URL() { return `${getConfig().AI_HOST}${getConfig().API_GROUP}`; },
   get CHAT_URL() { return `${getConfig().CHAT_HOST}${getConfig().API_GROUP}`; },
-  get SETTINGS_URL() { return `${getConfig().SETTINGS_HOST}${getConfig().API_GROUP}`; },
   TIMEOUT: 30000,
 };

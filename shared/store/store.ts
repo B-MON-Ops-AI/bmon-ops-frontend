@@ -4,12 +4,10 @@
  * @module shared/store
  */
 import { configureStore } from "@reduxjs/toolkit";
-import authReducer from '@/features/auth/model/authSlice';
 import uiReducer from '@/shared/store/slices/uiSlice';
 
 export const store = configureStore({
   reducer: {
-    auth: authReducer,
     ui: uiReducer,
   },
   middleware: (getDefaultMiddleware) =>

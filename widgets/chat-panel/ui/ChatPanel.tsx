@@ -48,6 +48,8 @@ export default function ChatPanel() {
           content: m.content,
           createdAt: m.createdAt,
         }));
+      // 서버 이력에서 로컬 메시지 최초 1회 시딩 (이후 로컬에서 append)
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLocalMessages(msgs);
     }
   }, [historyData]);

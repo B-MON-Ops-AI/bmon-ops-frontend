@@ -26,7 +26,6 @@ import CloseIcon from '@mui/icons-material/Close';
 import DoneAllIcon from '@mui/icons-material/DoneAll';
 import PsychologyIcon from '@mui/icons-material/Psychology';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import LightbulbIcon from '@mui/icons-material/Lightbulb';
 import HistoryIcon from '@mui/icons-material/History';
 import TaskAltIcon from '@mui/icons-material/TaskAlt';
@@ -222,8 +221,8 @@ export default function IncidentDetailDrawer({ incident, onClose }: Props) {
   const isCritical = incident.severity === 'fatal' || incident.severity === 'critical';
   const result = analysis?.status === 'completed' ? analysis.result : null;
 
-  const handleResolve = (resolution: string) =>
-    resolve({ incidentId: incident.id, resolution }, {
+  const handleResolve = (resolution: string, disposerId: string) =>
+    resolve({ incidentId: incident.id, resolution, disposerId }, {
       onSuccess: () => { setResolveOpen(false); dispatch(showSnackbar({ message: '인시던트가 해결되었습니다.', severity: 'success' })); },
       onError: () => dispatch(showSnackbar({ message: '처리에 실패했습니다.', severity: 'error' })),
     });

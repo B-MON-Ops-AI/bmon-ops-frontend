@@ -6,7 +6,7 @@
  * @module features/dashboard/ui
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { ResponsiveContainer, AreaChart, Area, Tooltip, YAxis } from 'recharts';
 import type { ChartDataPoint } from '@/entities/dashboard';
 
@@ -18,11 +18,13 @@ interface Props {
 export default function MiniChart({ data, color = '#3B82F6' }: Props) {
   // SSR에서 ResponsiveContainer는 width=0으로 측정 → 마운트 후에만 렌더링
   const [mounted, setMounted] = useState(false);
-  // gradId는 인스턴스당 1회만 생성 (렌더마다 바뀌면 gradient 참조가 깨짐)
-  const gradId = useRef(`grad-${Math.random().toString(36).slice(2, 9)}`).current;
+  // gradId는 인스턴스당 안정적 고유값 (SVG id/url 참조용 — colon 제거)
+  const gradId = `grad-${useId().replace(/:/g, '')}`;
   const yMax = (dataMax: number) => Math.max(dataMax, 1);
 
   useEffect(() => {
+    // SSR/정적 프리렌더 후 클라이언트 마운트에서만 차트 렌더 (ResponsiveContainer 0-width 회피)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
   }, []);
 

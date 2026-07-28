@@ -21,7 +21,7 @@ import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 interface Props {
   open: boolean;
   onClose: () => void;
-  onConfirm: (resolution: string) => void;
+  onConfirm: (resolution: string, disposerId: string) => void;
   isPending?: boolean;
   recommendedActions?: string[];
   isAnalysisLoading?: boolean;
@@ -36,10 +36,11 @@ export default function ResolveDialog({
   isAnalysisLoading,
 }: Props) {
   const [resolution, setResolution] = useState('');
+  const [disposerId, setDisposerId] = useState('');
 
   const handleConfirm = () => {
-    if (!resolution.trim()) return;
-    onConfirm(resolution.trim());
+    if (!resolution.trim() || !disposerId.trim()) return;
+    onConfirm(resolution.trim(), disposerId.trim());
   };
 
   const handleApplyAI = () => {
@@ -153,6 +154,34 @@ export default function ResolveDialog({
 
         <Divider sx={{ borderColor: 'rgba(255,255,255,0.07)', mb: 2.5 }} />
 
+        {/* ── 처리자 사번 입력 ── */}
+        <Box sx={{ mb: 2.5 }}>
+          <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.6)', display: 'block', mb: 1, fontSize: '0.75rem' }}>
+            처리자 사번
+          </Typography>
+          <Box
+            component="input"
+            placeholder="예: 82000001"
+            value={disposerId}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDisposerId(e.target.value)}
+            sx={{
+              display: 'block',
+              width: '100%',
+              boxSizing: 'border-box',
+              border: '1px solid rgba(255,255,255,0.23)',
+              borderRadius: 1,
+              p: '10px 14px',
+              backgroundColor: 'transparent',
+              color: 'rgba(255,255,255,0.87)',
+              fontFamily: 'inherit',
+              fontSize: '0.875rem',
+              outline: 'none',
+              '&:focus': { borderColor: '#6366F1', borderWidth: '2px' },
+              '&::placeholder': { color: 'rgba(255,255,255,0.3)' },
+            }}
+          />
+        </Box>
+
         {/* ── 해결 내용 입력 ── */}
         <Box>
           <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.6)', display: 'block', mb: 1, fontSize: '0.75rem' }}>
@@ -192,7 +221,7 @@ export default function ResolveDialog({
           variant="contained"
           color="success"
           onClick={handleConfirm}
-          disabled={!resolution.trim() || isPending}
+          disabled={!resolution.trim() || !disposerId.trim() || isPending}
           sx={{ minWidth: 100 }}
         >
           해결 완료

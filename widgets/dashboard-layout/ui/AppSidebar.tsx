@@ -8,6 +8,7 @@ import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import DashboardCustomizeIcon from "@mui/icons-material/DashboardCustomize";
 import ChatBubbleIcon from "@mui/icons-material/ChatBubble";
 import NotificationsNoneIcon from "@mui/icons-material/NotificationsNone";
+import ScienceOutlinedIcon from "@mui/icons-material/ScienceOutlined";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAppDispatch, toggleChatPanel } from "@/shared/store";
@@ -152,6 +153,15 @@ export default function AppSidebar() {
         >
           <NotificationsNoneIcon sx={{ fontSize: 15 }} />
           <span>알람 조건</span>
+        </Box>
+
+        <Box
+          component={Link}
+          href="/dashboard/shadow-test"
+          sx={navItemSx(pathname === "/dashboard/shadow-test")}
+        >
+          <ScienceOutlinedIcon sx={{ fontSize: 15 }} />
+          <span>Shadow Test</span>
         </Box>
 
         <Box sx={{ height: "1px", backgroundColor: "rgba(255,255,255,0.06)", mx: 1.5, my: 1 }} />

@@ -1,1 +1,1 @@
-export type { AlarmCondition, AlarmConditionListResponse, AlarmLevel, DetectType, DetectTerm, TriggerStatus } from './types';
+export type { AlarmCondition, AlarmConditionListResponse, UpdateAlarmConditionRequest, AlarmLevel, DetectType, DetectTerm, TriggerStatus } from './types';

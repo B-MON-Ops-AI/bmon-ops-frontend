@@ -8,10 +8,9 @@ import "@/shared/styles/globals.css";
 import { AppThemeProvider } from "@/shared/theme";
 import { StoreProvider } from "@/shared/store";
 import { QueryProvider } from "@/shared/lib";
-import { AuthGuard } from "@/features/auth";
 
 export const metadata: Metadata = {
-  title: "BMON Ops AI",
+  title: "BMON AI Agent",
   description: "AI 기반 인프라 모니터링 시스템",
 };
 
@@ -29,9 +28,7 @@ export default function RootLayout({
       <body>
         <StoreProvider>
           <QueryProvider>
-            <AppThemeProvider>
-              <AuthGuard>{children}</AuthGuard>
-            </AppThemeProvider>
+            <AppThemeProvider>{children}</AppThemeProvider>
           </QueryProvider>
         </StoreProvider>
       </body>

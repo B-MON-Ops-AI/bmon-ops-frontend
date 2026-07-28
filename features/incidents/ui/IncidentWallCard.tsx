@@ -73,6 +73,9 @@ export default function IncidentWallCard({ incident, onClick }: Props) {
       sx={{
         position: 'relative',
         overflow: 'hidden',
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
         border: isCritical ? '1px solid #DC262666' : '1px solid rgba(255,255,255,0.08)',
         transition: 'all 0.2s ease',
         '&:hover': {
@@ -111,8 +114,26 @@ export default function IncidentWallCard({ incident, onClick }: Props) {
         </Box>
       )}
 
-      <CardActionArea onClick={() => onClick(incident)} sx={{ height: '100%' }}>
-        <CardContent sx={{ pt: isCritical ? 2.5 : 2, pb: '12px !important' }}>
+      <CardActionArea
+        onClick={() => onClick(incident)}
+        sx={{
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'stretch',
+          '& .MuiCardActionArea-focusHighlight': { display: 'none' },
+        }}
+      >
+        <CardContent
+          sx={{
+            pt: isCritical ? 2.5 : 2,
+            pb: '12px !important',
+            flex: 1,
+            width: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
 
           {/* 헤더: 심각도+상태 / 탐지번호+시간 */}
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
@@ -135,8 +156,8 @@ export default function IncidentWallCard({ incident, onClick }: Props) {
             ({incident.serviceId}) {incident.serviceName}
           </Typography>
 
-          {/* 알람명 */}
-          <Typography variant="subtitle2" fontWeight={700} mb={0.75} sx={{ lineHeight: 1.3, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+          {/* 알람명 — 1줄이어도 2줄 높이를 확보하여 카드 높이 통일 */}
+          <Typography variant="subtitle2" fontWeight={700} mb={0.75} sx={{ lineHeight: 1.3, minHeight: '2.6em', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
             {incident.alarmName}
           </Typography>
 
@@ -174,6 +195,8 @@ export default function IncidentWallCard({ incident, onClick }: Props) {
             )}
           </Box>
 
+          {/* 하단 블록 — mt:auto로 카드 바닥에 고정하여 정렬 통일 */}
+          <Box sx={{ mt: 'auto' }}>
           <Divider sx={{ my: 0.75, borderColor: 'rgba(255,255,255,0.06)' }} />
 
           {/* 검출기준 · 탐지주기 */}
@@ -219,6 +242,7 @@ export default function IncidentWallCard({ incident, onClick }: Props) {
           <Typography variant="caption" color="text.disabled" sx={{ display: 'block', mt: 0.5, fontSize: '0.62rem' }}>
             발생: {dayjs(incident.occurredAt).format('MM-DD HH:mm')}
           </Typography>
+          </Box>
 
         </CardContent>
       </CardActionArea>

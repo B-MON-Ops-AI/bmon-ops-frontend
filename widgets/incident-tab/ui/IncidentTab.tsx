@@ -6,7 +6,7 @@
  * @module widgets/incident-tab/ui
  */
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import Box from '@mui/material/Box';
 import Grid from '@mui/material/Grid';
 import Typography from '@mui/material/Typography';
@@ -19,6 +19,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import ClearIcon from '@mui/icons-material/Clear';
 import IconButton from '@mui/material/IconButton';
 import LayersIcon from '@mui/icons-material/Layers';
+import FilterAltIcon from '@mui/icons-material/FilterAlt';
 import { IncidentWallCard, IncidentDetailDrawer, useIncidents } from '@/features/incidents';
 import type { Incident, Severity } from '@/entities/incident';
 import dayjs from 'dayjs';
@@ -283,6 +284,17 @@ export default function IncidentTab({
   onCustomFromChange,
   onCustomToChange,
 }: IncidentTabDateProps) {
+  // 커스텀 Wall 알람 이력 → "처리하기" 딥링크 (?seq=) : 특정 알람으로 핀 이동
+  const [pinnedSeq, setPinnedSeq] = useState<string | null>(null);
+  const deepLinkDone = useRef(false);
+
+  const clearPin = () => {
+    setPinnedSeq(null);
+    if (typeof window !== 'undefined') {
+      window.history.replaceState(null, '', '/dashboard/incident-wall');
+    }
+  };
+
   const [severity, setSeverity]       = useState<SeverityFilter>('all');
   const [resolved, setResolved]       = useState<ResolvedFilter>('unresolved');
   const [sortOrder, setSortOrder]     = useState<SortOrder>('newest');
@@ -290,6 +302,16 @@ export default function IncidentTab({
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch]           = useState('');
   const [groupByService, setGroupByService] = useState(false);
+
+  // 마운트 후 URL ?seq= 읽어 특정 알람으로 핀 (정적 export 하이드레이션 안전)
+  useEffect(() => {
+    const seq = new URLSearchParams(window.location.search).get('seq');
+    if (seq) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setPinnedSeq(seq);
+      setResolved('all'); // 미해소 필터에 가려지지 않도록
+    }
+  }, []);
 
   // 400ms 디바운스: 타이핑 중에는 API 호출 안 함
   useEffect(() => {
@@ -313,6 +335,17 @@ export default function IncidentTab({
   });
 
   const allIncidents = data?.incidents ?? [];
+
+  // 핀(?seq=)으로 지목된 인시던트
+  const pinnedIncident = pinnedSeq ? allIncidents.find((i) => i.alarmHstSeq === pinnedSeq) ?? null : null;
+
+  // 핀: 해당 알람 인시던트가 로드되면 상세 드로어 자동 오픈 (최초 1회)
+  useEffect(() => {
+    if (deepLinkDone.current || !pinnedIncident) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSelected(pinnedIncident);
+    deepLinkDone.current = true;
+  }, [pinnedIncident]);
 
   // 해결 상태 클라이언트 보정
   const filtered = resolved === 'unresolved'
@@ -625,7 +658,56 @@ export default function IncidentTab({
         </Box>
 
         {/* 인시던트 목록 */}
-        {isLoading ? (
+        {pinnedSeq ? (
+          // ── 핀 뷰: 커스텀 Wall에서 특정 알람으로 지목되어 이동 ──
+          <>
+            <Box
+              sx={{
+                mb: 2, px: 2, py: 1.25, borderRadius: 1.5,
+                backgroundColor: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.3)',
+                display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap',
+              }}
+            >
+              <FilterAltIcon sx={{ fontSize: 16, color: '#818CF8' }} />
+              <Typography variant="body2" sx={{ color: '#A5B4FC', fontWeight: 600 }}>
+                특정 알람으로 이동됨
+              </Typography>
+              {pinnedIncident && (
+                <Typography variant="caption" color="text.secondary" sx={{ minWidth: 0 }}>
+                  #{pinnedIncident.alarmHstSeq} · {pinnedIncident.serviceName} · {pinnedIncident.alarmName}
+                </Typography>
+              )}
+              <Box
+                onClick={clearPin}
+                sx={{
+                  ml: 'auto', px: 1.25, py: 0.4, borderRadius: '8px', cursor: 'pointer', userSelect: 'none',
+                  border: '1px solid rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', gap: 0.5,
+                  '&:hover': { borderColor: '#818CF8', backgroundColor: 'rgba(99,102,241,0.1)' },
+                }}
+              >
+                <ClearIcon sx={{ fontSize: 13, color: 'text.disabled' }} />
+                <Typography variant="caption" sx={{ color: 'text.secondary', whiteSpace: 'nowrap' }}>전체 목록 보기</Typography>
+              </Box>
+            </Box>
+
+            {isLoading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}><CircularProgress /></Box>
+            ) : pinnedIncident ? (
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6} md={4} lg={3}>
+                  <IncidentWallCard incident={pinnedIncident} onClick={setSelected} />
+                </Grid>
+              </Grid>
+            ) : (
+              <Box sx={{ textAlign: 'center', py: 8 }}>
+                <Typography color="text.secondary">해당 알람의 인시던트를 찾을 수 없습니다.</Typography>
+                <Typography variant="caption" color="text.disabled" display="block" mt={0.5}>
+                  이미 해소되었거나 조회 기간 밖일 수 있습니다. &quot;전체 목록 보기&quot;로 확인하세요.
+                </Typography>
+              </Box>
+            )}
+          </>
+        ) : isLoading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}>
             <CircularProgress />
           </Box>

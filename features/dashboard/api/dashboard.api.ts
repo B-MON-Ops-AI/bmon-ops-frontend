@@ -1,10 +1,10 @@
 /**
  * @file dashboard.api.ts
- * @description 대시보드 API 클라이언트 (위젯 CRUD, 메트릭 조회)
+ * @description 대시보드 API 클라이언트 (요약·시간대 추이·서비스 상태)
  * @module features/dashboard/api
  */
 import { dashboardClient } from '@/shared/api';
-import type { WidgetListResponse, MetricData, Widget, WidgetOrderItem, ServiceStatusListResponse } from '@/entities/dashboard';
+import type { DomainMetricsResponse, DomainPeriod } from '@/entities/dashboard';
 
 export const dashboardApi = {
   getSummary: (days = 7) =>
@@ -13,27 +13,8 @@ export const dashboardApi = {
   getHourlyTrend: () =>
     dashboardClient().get(`/dashboard/hourly-trend`).then((r) => r.data),
 
-  getWidgets: () =>
-    dashboardClient().get<WidgetListResponse>('/dashboard/widgets').then((r) => r.data),
-
-  getMetrics: (serviceId: string, metricType: string) =>
+  getDomainMetrics: (period: DomainPeriod = '30m') =>
     dashboardClient()
-      .get<MetricData>(`/dashboard/metrics/${serviceId}`, { params: { metricType } })
+      .get<DomainMetricsResponse>('/dashboard/domain-metrics', { params: { period } })
       .then((r) => r.data),
-
-  addWidget: (serviceId: string, metricType: string) =>
-    dashboardClient()
-      .post<Widget>('/dashboard/widgets', { serviceId, metricType })
-      .then((r) => r.data),
-
-  updateWidgetOrder: (widgetOrders: WidgetOrderItem[]) =>
-    dashboardClient()
-      .put('/dashboard/widgets/order', { widgetOrders })
-      .then((r) => r.data),
-
-  deleteWidget: (widgetId: string) =>
-    dashboardClient().delete(`/dashboard/widgets/${widgetId}`).then((r) => r.data),
-
-  getServiceStatuses: () =>
-    dashboardClient().get<ServiceStatusListResponse>('/dashboard/service-statuses').then((r) => r.data),
 };

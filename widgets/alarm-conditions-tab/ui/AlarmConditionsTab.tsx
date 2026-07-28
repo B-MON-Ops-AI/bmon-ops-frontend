@@ -491,35 +491,37 @@ function AlarmConditionCard({ cond, aiLoading, aiContent, suggestion, onRequestA
 
 // ── 컬럼 헤더 ──────────────────────────────────────────────────
 
+const COL_SX = { fontSize: '0.68rem', color: 'text.disabled', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase' as const, display: 'flex', alignItems: 'center', gap: 0.25, cursor: 'pointer', userSelect: 'none' as const };
+
+function SortIcon({ active, dir }: { active: boolean; dir: SortDir }) {
+  if (!active) return <KeyboardArrowDownIcon sx={{ fontSize: 13, opacity: 0.3 }} />;
+  return dir === 'asc'
+    ? <KeyboardArrowUpIcon sx={{ fontSize: 13, color: '#818CF8' }} />
+    : <KeyboardArrowDownIcon sx={{ fontSize: 13, color: '#818CF8' }} />;
+}
+
 function ColumnHeaders({ sortKey, sortDir, onSort }: {
   sortKey: SortKey; sortDir: SortDir;
   onSort: (key: SortKey) => void;
 }) {
-  const SortIcon = ({ k }: { k: SortKey }) => {
-    if (sortKey !== k) return <KeyboardArrowDownIcon sx={{ fontSize: 13, opacity: 0.3 }} />;
-    return sortDir === 'asc'
-      ? <KeyboardArrowUpIcon sx={{ fontSize: 13, color: '#818CF8' }} />
-      : <KeyboardArrowDownIcon sx={{ fontSize: 13, color: '#818CF8' }} />;
-  };
-
-  const colSx = { fontSize: '0.68rem', color: 'text.disabled', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase' as const, display: 'flex', alignItems: 'center', gap: 0.25, cursor: 'pointer', userSelect: 'none' as const };
+  const colSx = COL_SX;
 
   return (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, px: 2, py: 0.75, mb: 0.5 }}>
       <Box sx={{ width: 155, flexShrink: 0 }} onClick={() => onSort('serviceName')}>
-        <Typography sx={colSx}>서비스 <SortIcon k="serviceName" /></Typography>
+        <Typography sx={colSx}>서비스 <SortIcon active={sortKey === 'serviceName'} dir={sortDir} /></Typography>
       </Box>
       <Box sx={{ flex: 1 }} onClick={() => onSort('alarmName')}>
-        <Typography sx={colSx}>알람명 <SortIcon k="alarmName" /></Typography>
+        <Typography sx={colSx}>알람명 <SortIcon active={sortKey === 'alarmName'} dir={sortDir} /></Typography>
       </Box>
       <Box sx={{ width: 72, flexShrink: 0, display: 'flex', justifyContent: 'center' }} onClick={() => onSort('alarmLevel')}>
-        <Typography sx={colSx}>등급 <SortIcon k="alarmLevel" /></Typography>
+        <Typography sx={colSx}>등급 <SortIcon active={sortKey === 'alarmLevel'} dir={sortDir} /></Typography>
       </Box>
       <Box sx={{ width: 60, flexShrink: 0, display: 'flex', justifyContent: 'center' }}>
         <Typography sx={{ ...colSx, cursor: 'default' }}>활성</Typography>
       </Box>
       <Box sx={{ width: 72, flexShrink: 0, display: 'flex', justifyContent: 'flex-end' }} onClick={() => onSort('triggerCount30d')}>
-        <Typography sx={colSx}>30일 발생 <SortIcon k="triggerCount30d" /></Typography>
+        <Typography sx={colSx}>30일 발생 <SortIcon active={sortKey === 'triggerCount30d'} dir={sortDir} /></Typography>
       </Box>
       <Box sx={{ width: 68, flexShrink: 0, display: 'flex', justifyContent: 'center' }}>
         <Typography sx={{ ...colSx, cursor: 'default' }}>상태</Typography>
@@ -557,7 +559,7 @@ export default function AlarmConditionsTab() {
   const [aiState, setAiState] = useState<Record<string, { loading: boolean; content: string | null }>>({});
   const [selectedCond, setSelectedCond] = useState<AlarmCondition | null>(null);
 
-  const conditions = data?.conditions ?? [];
+  const conditions = useMemo(() => data?.conditions ?? [], [data?.conditions]);
 
   const filtered = useMemo(() => {
     let list = conditions;
@@ -739,6 +741,7 @@ export default function AlarmConditionsTab() {
       )}
 
       <AlarmConditionDetailDrawer
+        key={selectedCond?.alarmId ?? 'none'}
         cond={selectedCond}
         onClose={() => setSelectedCond(null)}
         aiLoading={!!(selectedCond && aiState[selectedCond.alarmId]?.loading)}

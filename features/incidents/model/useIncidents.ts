@@ -24,28 +24,11 @@ export function useCriticalCheck(since?: string) {
   });
 }
 
-export function useAckIncident() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (incidentId: string) => incidentApi.ackIncident(incidentId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['incidents'] }),
-  });
-}
-
-export function useMuteIncident() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ incidentId, minutes }: { incidentId: string; minutes: number }) =>
-      incidentApi.muteIncident(incidentId, minutes),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['incidents'] }),
-  });
-}
-
 export function useResolveIncident() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ incidentId, resolution }: { incidentId: string; resolution: string }) =>
-      incidentApi.resolveIncident(incidentId, resolution),
+    mutationFn: ({ incidentId, resolution, disposerId }: { incidentId: string; resolution: string; disposerId: string }) =>
+      incidentApi.resolveIncident(incidentId, resolution, disposerId),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['incidents'] }),
   });
 }

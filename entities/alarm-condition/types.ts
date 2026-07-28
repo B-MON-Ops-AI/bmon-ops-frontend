@@ -39,3 +39,11 @@ export interface AlarmConditionListResponse {
   conditions: AlarmCondition[];
   totalCount: number;
 }
+
+// 알람조건 수동 편집 요청 (임계값·검출주기·사용여부 + 처리자)
+export interface UpdateAlarmConditionRequest {
+  thrs: number;
+  detectTerm: DetectTerm;
+  useYn: 'Y' | 'N';
+  chgrId: string;
+}
