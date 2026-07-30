@@ -177,6 +177,21 @@ function DarkTooltip({ active, payload, label }: { active?: boolean; payload?: {
 }
 
 // ── 메인 컴포넌트 ─────────────────────────────────────────
+// 일별 추이를 날짜별로 합산 (중복 날짜 행 정규화)
+type DailyTrendItem = { date: string; fatal: number; critical: number; major: number; minor: number };
+function aggregateTrendByDate(rows: DailyTrendItem[]): DailyTrendItem[] {
+  const byDate = new Map<string, DailyTrendItem>();
+  for (const d of rows) {
+    const cur = byDate.get(d.date) ?? { date: d.date, fatal: 0, critical: 0, major: 0, minor: 0 };
+    cur.fatal += d.fatal ?? 0;
+    cur.critical += d.critical ?? 0;
+    cur.major += d.major ?? 0;
+    cur.minor += d.minor ?? 0;
+    byDate.set(d.date, cur);
+  }
+  return Array.from(byDate.values());
+}
+
 export default function OverviewTab() {
   const [days, setDays] = useState(7);
   const { data, isLoading } = useSummary(days);
@@ -196,6 +211,10 @@ export default function OverviewTab() {
   const { kpi, severityCounts, serviceRanking, detectTypeCounts, dailyTrend, recentCritical } = data;
 
   const sevTotal = severityCounts.reduce((s: number, r: { count: number }) => s + r.count, 0) || 1;
+
+  // 일별 추이 방어적 집계 — BE가 날짜당 1행으로 집계해 보내야 하나, 인시던트당 1행이
+  // 올 경우(중복 날짜) 차트가 x축 중복·톱니 모양으로 깨지므로 날짜별로 합산해 정규화한다.
+  const dailyTrendAgg = aggregateTrendByDate(dailyTrend);
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -436,7 +455,7 @@ export default function OverviewTab() {
                 )
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={dailyTrend} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+                  <AreaChart data={dailyTrendAgg} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
                     <defs>
                       <linearGradient id="gfatal" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%"  stopColor={C.fatal} stopOpacity={0.4} />
@@ -459,7 +478,7 @@ export default function OverviewTab() {
                     <XAxis
                       dataKey="date"
                       tick={{ fill: C.muted, fontSize: 10 }}
-                      interval={Math.max(0, Math.floor(dailyTrend.length / 8))}
+                      interval={Math.max(0, Math.floor(dailyTrendAgg.length / 8))}
                       tickFormatter={(v: string) => (typeof v === 'string' && v.length >= 10 ? v.slice(5) : v)}
                     />
                     <YAxis tick={{ fill: C.muted, fontSize: 11 }} allowDecimals={false} domain={[0, (dataMax: number) => Math.max(dataMax, 5)]} />

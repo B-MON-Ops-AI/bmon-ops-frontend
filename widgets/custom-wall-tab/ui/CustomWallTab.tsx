@@ -6,7 +6,7 @@
  * @module widgets/custom-wall-tab/ui
  *
  * 소스: bmonown.mo_bymi_* (알람과 무결합, 순수 운영지표)
- * 집계/연동: 부하 방지를 위해 1분 실시간 미채택 → 30분(byhr)·1일(bydy) 주기 토글
+ * 집계/연동: 부하 방지를 위해 1분 실시간 미채택 → 10분(bymi)·1일(byhr) 주기 토글
  * 도메인: 데이터가 유의미한 4개만 노출 (Order·LT·B2C CRM·유통).
  *         Order(DOMORDER) · LT(DOMLT) · B2C CRM(DOMB2CCRM) · 유통(DOMRDS)
  *         ICIS-TR(ICISTR)·B2B CRM(DOMB2BCRM)은 처리 2~24건으로 통계 불성립 → 제외.
@@ -21,12 +21,18 @@ import Chip from "@mui/material/Chip";
 import ToggleButton from "@mui/material/ToggleButton";
 import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 import CircularProgress from "@mui/material/CircularProgress";
+import TextField from "@mui/material/TextField";
+import InputAdornment from "@mui/material/InputAdornment";
+import MenuItem from "@mui/material/MenuItem";
+import Button from "@mui/material/Button";
 import ScheduleIcon from "@mui/icons-material/Schedule";
 import AutorenewIcon from "@mui/icons-material/Autorenew";
+import SearchIcon from "@mui/icons-material/Search";
 import dayjs from "dayjs";
 import { useDomainMetrics } from "@/features/dashboard";
 import type { DomainId, DomainPeriod } from "@/entities/dashboard";
 import DomainMetricPanel from "./DomainMetricPanel";
+import AlarmGapPanel from "./AlarmGapPanel";
 
 const DOMAIN_TABS: { id: DomainId; label: string }[] = [
   { id: "all", label: "전체" },
@@ -37,14 +43,55 @@ const DOMAIN_TABS: { id: DomainId; label: string }[] = [
 ];
 
 const PERIOD_LABEL: Record<DomainPeriod, { window: string; poll: string }> = {
-  "30m": { window: "최근 30분 집계", poll: "30분마다 갱신" },
+  "10m": { window: "최근 10분 집계", poll: "10분마다 갱신" },
   "1d": { window: "최근 1일 집계", poll: "1일마다 갱신" },
 };
 
+// 상단 공통 필터 옵션 (알람 이력 필터용)
+const LEVEL_OPTIONS: { value: string; label: string }[] = [
+  { value: "all", label: "전체 등급" },
+  { value: "Fatal", label: "Fatal" },
+  { value: "Critical", label: "Critical" },
+  { value: "Major", label: "Major" },
+  { value: "Minor", label: "Minor" },
+];
+const STATUS_OPTIONS: { value: string; label: string }[] = [
+  { value: "all", label: "전체 상태" },
+  { value: "open", label: "미해소" },
+  { value: "resolved", label: "해결" },
+  { value: "cleared", label: "자동해소" },
+];
+
+// 다크 테마 컴팩트 필터 인풋 (앱 톤: 34px 높이 · 인디고 포커스)
+const compactField = {
+  "& .MuiOutlinedInput-root": {
+    height: 34,
+    fontSize: "0.76rem",
+    color: "text.secondary",
+    backgroundColor: "rgba(255,255,255,0.03)",
+    "& fieldset": { borderColor: "rgba(255,255,255,0.12)" },
+    "&:hover fieldset": { borderColor: "rgba(255,255,255,0.22)" },
+    "&.Mui-focused fieldset": { borderColor: "rgba(99,102,241,0.55)" },
+  },
+  "& .MuiSelect-icon": { color: "rgba(255,255,255,0.4)" },
+  "& input::placeholder": { color: "rgba(255,255,255,0.35)", opacity: 1 },
+} as const;
+
 export default function CustomWallTab() {
   const [domainIdx, setDomainIdx] = useState(0);
-  const [period, setPeriod] = useState<DomainPeriod>("30m");
+  const [period, setPeriod] = useState<DomainPeriod>("10m");
+  // 상단 공통 필터 (클라이언트) — 서비스 검색 · 등급 · 처리상태
+  const [svcQuery, setSvcQuery] = useState("");
+  const [level, setLevel] = useState("all");
+  const [status, setStatus] = useState("all");
   const { data, isLoading } = useDomainMetrics(period);
+
+  const hasFilter = svcQuery.trim() !== "" || level !== "all" || status !== "all";
+  const resetFilters = () => {
+    setSvcQuery("");
+    setLevel("all");
+    setStatus("all");
+  };
 
   const currentId = DOMAIN_TABS[domainIdx].id;
   const metrics = data?.domains.find((d) => d.domainId === currentId) ?? null;
@@ -99,7 +146,7 @@ export default function CustomWallTab() {
               },
             }}
           >
-            <ToggleButton value="30m">30분</ToggleButton>
+            <ToggleButton value="10m">10분</ToggleButton>
             <ToggleButton value="1d">1일</ToggleButton>
           </ToggleButtonGroup>
 
@@ -178,13 +225,93 @@ export default function CustomWallTab() {
         </Tabs>
       </Box>
 
+      {/* ── 상단 공통 필터 (서비스 검색 · 등급 · 처리상태) ── */}
+      <Box
+        sx={{
+          display: "flex",
+          gap: 1,
+          mb: 2.5,
+          flexWrap: "wrap",
+          alignItems: "center",
+        }}
+      >
+        <TextField
+          size="small"
+          placeholder="서비스·오퍼레이션·알람 검색"
+          value={svcQuery}
+          onChange={(e) => setSvcQuery(e.target.value)}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon
+                  sx={{ fontSize: 15, color: "rgba(255,255,255,0.4)" }}
+                />
+              </InputAdornment>
+            ),
+          }}
+          sx={{ ...compactField, width: 260, flexShrink: 0 }}
+        />
+        <TextField
+          select
+          size="small"
+          value={level}
+          onChange={(e) => setLevel(e.target.value)}
+          sx={{ ...compactField, width: 124, flexShrink: 0 }}
+        >
+          {LEVEL_OPTIONS.map((o) => (
+            <MenuItem key={o.value} value={o.value} sx={{ fontSize: "0.76rem" }}>
+              {o.label}
+            </MenuItem>
+          ))}
+        </TextField>
+        <TextField
+          select
+          size="small"
+          value={status}
+          onChange={(e) => setStatus(e.target.value)}
+          sx={{ ...compactField, width: 132, flexShrink: 0 }}
+        >
+          {STATUS_OPTIONS.map((o) => (
+            <MenuItem key={o.value} value={o.value} sx={{ fontSize: "0.76rem" }}>
+              {o.label}
+            </MenuItem>
+          ))}
+        </TextField>
+        {hasFilter && (
+          <Button
+            onClick={resetFilters}
+            size="small"
+            sx={{
+              minWidth: 0,
+              px: 1,
+              height: 34,
+              fontSize: "0.72rem",
+              color: "text.disabled",
+              textTransform: "none",
+              "&:hover": {
+                color: "#A5B4FC",
+                backgroundColor: "rgba(99,102,241,0.08)",
+              },
+            }}
+          >
+            초기화
+          </Button>
+        )}
+      </Box>
+
+      {/* ── AI 알람 제안 (해당 도메인 공백) ── */}
+      <AlarmGapPanel domainId={currentId} />
+
       {/* ── 지표 패널 ── */}
       {isLoading ? (
         <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
           <CircularProgress />
         </Box>
       ) : metrics ? (
-        <DomainMetricPanel metrics={metrics} />
+        <DomainMetricPanel
+          metrics={metrics}
+          filters={{ svcQuery, level, status }}
+        />
       ) : (
         <Box sx={{ textAlign: "center", py: 8 }}>
           <Typography color="text.secondary">

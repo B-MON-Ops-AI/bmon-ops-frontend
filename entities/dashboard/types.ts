@@ -4,8 +4,9 @@
  * @module entities/dashboard
  */
 export interface ChartDataPoint {
-  time: string;
+  time: string;    // 축 라벨 (HH:MM)
   value: number;
+  ts?: string;     // 전체 시각 (ISO) — hover 툴팁에서 날짜+시각 표시용
 }
 
 // ── 도메인 실측 지표 (커스텀 Wall) ─────────────────────────────
@@ -13,8 +14,9 @@ export interface ChartDataPoint {
 
 export type DomainId = 'all' | 'order' | 'lt' | 'b2ccrm' | 'rds';
 
-/** 집계·연동 주기 — 부하 방지를 위해 실시간(1분) 대신 30분/1일 주기 집계 */
-export type DomainPeriod = '30m' | '1d';
+/** 집계·연동 주기 — 부하 방지를 위해 실시간(1분) 대신 10분/1일 주기 집계
+ *  (10m → bymi 분단위 / 1d → byhr 시간단위. BE PERIOD_CONFIG와 대응) */
+export type DomainPeriod = '10m' | '1d';
 
 /** 특화 카드(하단) 분해 축 */
 export type BreakdownType = 'service' | 'channel' | 'esb';
@@ -22,10 +24,27 @@ export type BreakdownType = 'service' | 'channel' | 'esb';
 export interface DomainBreakdownItem {
   name: string;          // svc_nm
   opName: string;        // op_nm ('service' 등)
-  throughput: number;    // 처리량(건)
-  errorRate: number | null;
+  throughput: number;    // 정상(I) = deal_i
+  dealD: number;         // 정상(D) = deal_d
+  errS: number;          // 오류(S) = err_s (시스템)
+  errE: number;          // 오류(E) = err_e (외부)
+  errorRate: number | null;   // (S+E)/n
+  errorRateS: number;    // 오류율(S)
+  errorRateE: number;    // 오류율(E)
   avgResponseMs: number;
   maxResponseMs: number;
+  responseStdDev: number; // 표준편차
+}
+
+/** 시간대별 오버레이 1버킷 (정상호출·평균응답·오류호출 겹쳐보기 + hover용 전 지표) */
+export interface DomainOverlayPoint {
+  time: string;
+  normal: number;    // 정상호출 (deal_i)
+  avgResp: number;   // 평균응답 (ms)
+  errCount: number;  // 오류호출 (err_s+err_e)
+  errRate: number;   // 오류율 (%)
+  maxResp: number;   // 최대응답 (ms)
+  ts?: string;       // 전체 시각 (ISO) — hover 툴팁 날짜+시각
 }
 
 export type DomainAlarmStatus = 'open' | 'resolved' | 'cleared';
@@ -63,6 +82,8 @@ export interface DomainMetrics {
   throughputTrend: ChartDataPoint[];
   errorRateTrend: ChartDataPoint[];
   responseTrend: ChartDataPoint[];
+  maxResponseTrend: ChartDataPoint[]; // 버킷별 최대응답(ms) — 최대응답 카드 스파크라인·hover
+  hourlyOverlay: DomainOverlayPoint[]; // 시간대별 정상·응답·오류 겹쳐보기 (image6 스타일)
   breakdownType: BreakdownType;
   breakdownTitle: string;
   breakdown: DomainBreakdownItem[];
@@ -70,8 +91,8 @@ export interface DomainMetrics {
 }
 
 export interface DomainMetricsResponse {
-  period: DomainPeriod;    // 집계 주기 ('30m' → byhr 롤업 / '1d' → bydy)
-  windowMinutes: number;   // 집계 시간창 (30 또는 1440). 부하 방지를 위해 1분 미채택
+  period: DomainPeriod;    // 집계 주기 ('10m' → bymi 분단위 / '1d' → byhr 시간단위)
+  windowMinutes: number;   // 집계 시간창 (10 또는 1440). 부하 방지를 위해 1분 미채택
   asOf: string;            // 기준 시각 = 마지막으로 완결된 집계 버킷 (ISO)
   domains: DomainMetrics[];
 }

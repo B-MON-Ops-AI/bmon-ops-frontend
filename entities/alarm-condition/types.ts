@@ -47,3 +47,50 @@ export interface UpdateAlarmConditionRequest {
   useYn: 'Y' | 'N';
   chgrId: string;
 }
+
+// ── AI 알람 공백 제안 (byhr 통계 기반) ──────────────────────
+export interface AlarmGapProposal {
+  svcNm: string;
+  opNm: string;
+  domnId: string;
+  metric: string;            // '오류율' | '최대응답' | '시스템오류' | '외부오류' | '호출량'
+  detectType: DetectType;
+  comprType: ComprType;      // COMPR_MRTH(이상) | COMPR_BLW(이하)
+  type: string;              // '상대' | '절대'
+  peak: number;
+  unit: string;              // '%' | 'ms' | '건'
+  baseline: number | null;   // 평소값 (상대 판정 시)
+  proposedThreshold: number;
+  alarmLevel: AlarmLevel;
+  breachHits: number;
+  reasons: string[];
+  // 등록 필드 프리필 (활동창은 baseline에서 유도)
+  detectTerm: DetectTerm;
+  detectDow: string;
+  detectStTime: string;      // HHmm
+  detectFnsTime: string;     // HHmm
+}
+
+export interface AlarmGapResponse {
+  asOf: string | null;
+  baselineDays: number;
+  proposals: AlarmGapProposal[];
+  totalCount: number;
+}
+
+// 알람조건 신규 등록 요청 (공백 제안 승인)
+export interface CreateAlarmConditionRequest {
+  svcNm: string;
+  opNm?: string;
+  detectType: DetectType;
+  thrs: number;
+  alarmLevel: AlarmLevel;
+  dlgtUnitSvcCd?: string;
+  alarmNm?: string;
+  detectTerm?: DetectTerm;
+  comprType?: ComprType;
+  detectDow?: string;
+  detectStTime?: string;
+  detectFnsTime?: string;
+  regrId?: string;
+}

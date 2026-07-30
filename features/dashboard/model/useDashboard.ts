@@ -10,9 +10,9 @@ import type { DomainPeriod } from '@/entities/dashboard';
 const POLLING = Number(process.env.NEXT_PUBLIC_POLLING_INTERVAL ?? 60_000);
 
 // 도메인 지표 연동 주기 — 부하 방지를 위해 1분 실시간 미채택.
-// 30분(byhr 롤업) / 1일(bydy) 주기에 맞춰 폴링.
+// 10분(bymi 분단위) / 1일(byhr 시간단위) 주기에 맞춰 폴링.
 export const DOMAIN_POLL_MS: Record<DomainPeriod, number> = {
-  '30m': 30 * 60_000,
+  '10m': 10 * 60_000,
   '1d': 24 * 60 * 60_000,
 };
 
@@ -32,7 +32,7 @@ export function useHourlyTrend() {
   });
 }
 
-export function useDomainMetrics(period: DomainPeriod = '30m') {
+export function useDomainMetrics(period: DomainPeriod = '10m') {
   return useQuery({
     queryKey: ['domain-metrics', period],
     queryFn: () => dashboardApi.getDomainMetrics(period),

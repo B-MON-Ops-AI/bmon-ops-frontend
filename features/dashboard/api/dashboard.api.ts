@@ -13,7 +13,7 @@ export const dashboardApi = {
   getHourlyTrend: () =>
     dashboardClient().get(`/dashboard/hourly-trend`).then((r) => r.data),
 
-  getDomainMetrics: (period: DomainPeriod = '30m') =>
+  getDomainMetrics: (period: DomainPeriod = '10m') =>
     dashboardClient()
       .get<DomainMetricsResponse>('/dashboard/domain-metrics', { params: { period } })
       .then((r) => r.data),

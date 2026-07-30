@@ -4,4 +4,4 @@
  * @module entities/dashboard
  */
 export type { ChartDataPoint } from './types';
-export type { DomainId, DomainPeriod, BreakdownType, DomainBreakdownItem, DomainAlarmStatus, DomainAlarmEvent, DomainMetrics, DomainMetricsResponse } from './types';
+export type { DomainId, DomainPeriod, BreakdownType, DomainBreakdownItem, DomainOverlayPoint, DomainAlarmStatus, DomainAlarmEvent, DomainMetrics, DomainMetricsResponse } from './types';
