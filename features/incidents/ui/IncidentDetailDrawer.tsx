@@ -33,11 +33,13 @@ import InsightsIcon from '@mui/icons-material/Insights';
 import ChatIcon from '@mui/icons-material/Chat';
 import SendIcon from '@mui/icons-material/Send';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import FingerprintIcon from '@mui/icons-material/Fingerprint';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import 'dayjs/locale/ko';
 import ReactMarkdown from 'react-markdown';
-import { SeverityChip, StatusChip } from '@/shared/ui';
+import { SeverityChip, StatusChip, EmptyState, LoadingState, ErrorState } from '@/shared/ui';
 import ResolveDialog from './ResolveDialog';
 import { useAIAnalysis, useRequestAnalysis } from '@/features/incidents/model/useAI';
 import { useResolveIncident } from '@/features/incidents/model/useIncidents';
@@ -49,8 +51,8 @@ dayjs.extend(relativeTime);
 dayjs.locale('ko');
 
 const detectTypeLabels: Record<string, string> = {
-  ERR_S: '시스템오류', RPY_TIME: '응답시간',
-  ERR_RATE: '오류율', ERR_E: '외부오류', CALL_CASCNT: '호출건수',
+  ERR_S: '시스템오류', RPY_TIME: '응답시간(ms)',
+  ERR_RATE: '오류율(%)', ERR_E: '비즈니스 오류', CALL_CASCNT: '호출수',
 };
 const detectTermLabels: Record<string, string> = {
   MIN1: '1분', MIN5: '5분', MIN10: '10분', HOUR1: '1시간', DAY1: '1일',
@@ -142,17 +144,20 @@ function SimilarCaseCard({
 
 // ── 상세 정보 헬퍼 ─────────────────────────────────────
 
+// 알람조건 상세 드로어와 통일: 라벨 폭 86 · value 0.78rem · text.primary
 function InfoRow({ label, value, mono }: { label: string; value?: string | number | null; mono?: boolean }) {
   if (value === undefined || value === null || value === '') return null;
   return (
-    <Box sx={{ display: 'flex', gap: 1, py: 0.5, alignItems: 'flex-start' }}>
-      <Typography variant="caption" color="text.disabled" sx={{ fontSize: '0.65rem', minWidth: 80, flexShrink: 0, pt: 0.1 }}>
+    <Box sx={{ display: 'flex', gap: 1, py: 0.75, alignItems: 'flex-start' }}>
+      <Typography sx={{ fontSize: '0.68rem', color: 'text.disabled', width: 86, flexShrink: 0, pt: 0.1 }}>
         {label}
       </Typography>
       <Typography
-        variant="caption"
-        color="text.secondary"
-        sx={{ fontSize: '0.72rem', lineHeight: 1.5, wordBreak: 'break-all', ...(mono && { fontFamily: 'monospace', color: '#a5b4fc' }) }}
+        sx={{
+          flex: 1, fontSize: '0.78rem', lineHeight: 1.5, wordBreak: 'break-all',
+          color: mono ? '#a5b4fc' : 'text.primary',
+          ...(mono && { fontFamily: 'monospace' }),
+        }}
       >
         {String(value)}
       </Typography>
@@ -160,14 +165,85 @@ function InfoRow({ label, value, mono }: { label: string; value?: string | numbe
   );
 }
 
+// 알람조건 상세와 통일: 섹션마다 테두리 박스로 그룹핑 + 표시되는 행끼리만 구분선.
+// (값이 없어 null을 반환한 InfoRow는 DOM에 렌더되지 않으므로 CSS 형제 선택자로 구분선을 자동 처리)
 function DetailSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <Box sx={{ mb: 1.5 }}>
-      <Typography variant="caption" color="text.disabled"
-        sx={{ fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700, display: 'block', mb: 0.5 }}>
+    <Box sx={{ mb: 2 }}>
+      <Typography
+        sx={{ fontSize: '0.65rem', fontWeight: 600, color: 'text.disabled', mb: 0.75, letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block' }}>
         {title}
       </Typography>
-      <Box sx={{ pl: 0.5 }}>{children}</Box>
+      <Box
+        sx={{
+          borderRadius: 1.5, border: '1px solid rgba(255,255,255,0.07)', px: 1.75, py: 0.5,
+          '& > *': { borderTop: '1px solid rgba(255,255,255,0.04)' },
+          '& > *:first-of-type': { borderTop: 'none' },
+        }}
+      >
+        {children}
+      </Box>
+    </Box>
+  );
+}
+
+// ── 알람 식별 블록 ─────────────────────────────────────
+// 인시던트를 특정하는 핵심 식별자(시퀀스·알람 ID)를 상단 카드로 격상 + 복사 지원.
+
+function IdentityField({
+  label, value, onCopy,
+}: {
+  label: string; value: string | number; onCopy: (v: string, label: string) => void;
+}) {
+  const text = String(value);
+  return (
+    <Box
+      sx={{
+        flex: 1, minWidth: 0,
+        px: 1.25, py: 0.75, borderRadius: 1,
+        backgroundColor: 'rgba(255,255,255,0.03)',
+        border: '1px solid rgba(255,255,255,0.06)',
+        display: 'flex', flexDirection: 'column', gap: 0.15,
+      }}
+    >
+      <Typography sx={{ fontSize: '0.58rem', color: 'text.disabled', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>
+        {label}
+      </Typography>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+        <Typography sx={{ fontSize: '0.82rem', fontFamily: 'monospace', color: '#a5b4fc', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {text}
+        </Typography>
+        <Tooltip title="복사">
+          <IconButton size="small" onClick={() => onCopy(text, label)}
+            sx={{ p: 0.25, ml: 'auto', color: 'text.disabled', '&:hover': { color: '#a5b4fc' } }}>
+            <ContentCopyIcon sx={{ fontSize: 12 }} />
+          </IconButton>
+        </Tooltip>
+      </Box>
+    </Box>
+  );
+}
+
+function IdentityBlock({
+  seq, alarmId, onCopy,
+}: {
+  seq: string | number; alarmId?: string | number | null; onCopy: (v: string, label: string) => void;
+}) {
+  return (
+    <Box sx={{ mb: 2 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mb: 0.75 }}>
+        <FingerprintIcon sx={{ fontSize: 14, color: 'text.disabled' }} />
+        <Typography variant="caption" color="text.disabled"
+          sx={{ fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700 }}>
+          알람 식별
+        </Typography>
+      </Box>
+      <Box sx={{ display: 'flex', gap: 1 }}>
+        <IdentityField label="시퀀스" value={`#${seq}`} onCopy={onCopy} />
+        {alarmId != null && alarmId !== '' && (
+          <IdentityField label="알람 ID" value={alarmId} onCopy={onCopy} />
+        )}
+      </Box>
     </Box>
   );
 }
@@ -232,6 +308,13 @@ export default function IncidentDetailDrawer({ incident, onClose }: Props) {
       onError: () => dispatch(showSnackbar({ message: 'AI 분석 요청에 실패했습니다.', severity: 'error' })),
     });
 
+  const handleCopy = (value: string, label: string) => {
+    navigator.clipboard?.writeText(value).then(
+      () => dispatch(showSnackbar({ message: `${label} 복사됨: ${value}`, severity: 'success' })),
+      () => dispatch(showSnackbar({ message: '복사에 실패했습니다.', severity: 'error' })),
+    );
+  };
+
   // ── Chat 전송 (백엔드 AI 연동) ─────────────────────────
   // incident별 고유 세션을 사용하여 알람 컨텍스트가 다른 대화와 섞이지 않도록 함
   const incidentSessionId = incident ? `incident-${incident.alarmHstSeq}` : 'incident-unknown';
@@ -267,33 +350,21 @@ export default function IncidentDetailDrawer({ incident, onClose }: Props) {
   // ── AI 로딩·진행·실패 상태 ──────────────────────────────
   const renderAIStatus = () => {
     if (analysisLoading) {
-      return (
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 4, justifyContent: 'center' }}>
-          <CircularProgress size={20} />
-          <Typography variant="body2" color="text.secondary">분석 불러오는 중...</Typography>
-        </Box>
-      );
+      return <LoadingState variant="spinner" label="분석 불러오는 중..." />;
     }
     if (!analysis || analysis.status === 'pending' || analysis.status === 'in_progress' || requesting) {
       const progress = analysis?.progress ?? 0;
       const step = analysis?.currentStep ?? 'AI 분석을 준비 중입니다...';
-      return (
-        <Box sx={{ py: 3 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-            <CircularProgress size={18} color="primary" />
-            <Typography variant="body2" color="primary.main" fontWeight={500}>{step}</Typography>
-          </Box>
-          <LinearProgress variant={progress > 0 ? 'determinate' : 'indeterminate'} value={progress} sx={{ height: 6, borderRadius: 3 }} />
-          {progress > 0 && <Typography variant="caption" color="text.secondary" display="block" textAlign="right" mt={0.5}>{progress}%</Typography>}
-        </Box>
-      );
+      return <LoadingState variant="linear" label={step} progress={progress > 0 ? progress : undefined} />;
     }
     if (analysis.status === 'failed') {
       return (
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 3 }}>
-          <Typography variant="body2" color="error">분석에 실패했습니다.</Typography>
-          <Button size="small" startIcon={<RefreshIcon />} onClick={handleReanalyze}>재시도</Button>
-        </Box>
+        <ErrorState
+          dense
+          title="분석에 실패했습니다"
+          description="AI 분석을 다시 요청할 수 있습니다."
+          onRetry={handleReanalyze}
+        />
       );
     }
     return null;
@@ -437,11 +508,11 @@ export default function IncidentDetailDrawer({ incident, onClose }: Props) {
     if (aiTab === 1) {
       if (result.similarCases.length === 0) {
         return (
-          <Box sx={{ textAlign: 'center', py: 6, border: '1px dashed rgba(255,255,255,0.1)', borderRadius: 2 }}>
-            <HistoryIcon sx={{ fontSize: 40, color: 'text.disabled', mb: 1 }} />
-            <Typography variant="body2" color="text.secondary">유사 사례를 찾지 못했습니다.</Typography>
-            <Typography variant="caption" color="text.disabled" display="block" mt={0.5}>이 인시던트는 처음 발생하는 유형일 수 있습니다.</Typography>
-          </Box>
+          <EmptyState
+            icon={<HistoryIcon />}
+            title="유사 사례를 찾지 못했습니다"
+            description="이 인시던트는 처음 발생하는 유형일 수 있습니다."
+          />
         );
       }
       return (
@@ -595,10 +666,7 @@ export default function IncidentDetailDrawer({ incident, onClose }: Props) {
               {/* 중간 스크롤: 상세 데이터 */}
               <Box sx={{ flex: 1, overflowY: 'auto', px: 3, py: 2, minHeight: 0 }}>
 
-                <DetailSection title="알람 식별">
-                  <InfoRow label="시퀀스" value={`#${incident.alarmHstSeq}`} mono />
-                  <InfoRow label="알람 ID" value={incident.alarmId} mono />
-                </DetailSection>
+                <IdentityBlock seq={incident.alarmHstSeq} alarmId={incident.alarmId} onCopy={handleCopy} />
 
                 <DetailSection title="서비스 정보">
                   <InfoRow label="단위서비스" value={`${incident.serviceId} (${incident.serviceName})`} />

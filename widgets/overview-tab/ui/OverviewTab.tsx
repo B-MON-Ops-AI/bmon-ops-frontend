@@ -12,6 +12,7 @@ import Grid from '@mui/material/Grid';
 import Typography from '@mui/material/Typography';
 import CircularProgress from '@mui/material/CircularProgress';
 import Chip from '@mui/material/Chip';
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import 'dayjs/locale/ko';
@@ -43,6 +44,15 @@ const SEV_LABEL: Record<string, string> = {
 };
 const DETECT_COLORS = ['#6366F1','#22D3EE','#F59E0B','#10B981','#EC4899'];
 
+// 심각도 추이 시리즈 정의 (stack 순서 = 배열 순서)
+const SEV_AREAS = [
+  { key: 'fatal',    name: 'Fatal',    color: C.fatal,    grad: 'gfatal' },
+  { key: 'critical', name: 'Critical', color: C.critical, grad: 'gcritical' },
+  { key: 'major',    name: 'Major',    color: C.major,    grad: 'gmajor' },
+  { key: 'minor',    name: 'Minor',    color: C.minor,    grad: 'gminor' },
+] as const;
+type SevKey = (typeof SEV_AREAS)[number]['key'];
+
 // ── 공통 카드 래퍼 ───────────────────────────────────────
 function Card({ children, sx = {} }: { children: React.ReactNode; sx?: object }) {
   return (
@@ -70,6 +80,16 @@ function CardTitle({ children }: { children: React.ReactNode }) {
     >
       {children}
     </Typography>
+  );
+}
+
+// ── 빈 상태 가이드 (인시던트 없음) ────────────────────────
+function EmptyState({ message, height = 150 }: { message: string; height?: number | string }) {
+  return (
+    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 1, height }}>
+      <CheckCircleOutlineIcon sx={{ fontSize: 26, color: 'rgba(52,211,153,0.5)' }} />
+      <Typography variant="caption" sx={{ color: C.muted, fontSize: '0.72rem' }}>{message}</Typography>
+    </Box>
   );
 }
 
@@ -176,9 +196,11 @@ function DarkTooltip({ active, payload, label }: { active?: boolean; payload?: {
   );
 }
 
-// ── 메인 컴포넌트 ─────────────────────────────────────────
+// ── 심각도 추이 데이터 유틸 ───────────────────────────────
+type TrendRow = { fatal: number; critical: number; major: number; minor: number };
+type DailyTrendItem = TrendRow & { date: string };
+
 // 일별 추이를 날짜별로 합산 (중복 날짜 행 정규화)
-type DailyTrendItem = { date: string; fatal: number; critical: number; major: number; minor: number };
 function aggregateTrendByDate(rows: DailyTrendItem[]): DailyTrendItem[] {
   const byDate = new Map<string, DailyTrendItem>();
   for (const d of rows) {
@@ -192,6 +214,73 @@ function aggregateTrendByDate(rows: DailyTrendItem[]): DailyTrendItem[] {
   return Array.from(byDate.values());
 }
 
+// 최근 days일을 모두 채운 조밀 시리즈 (데이터 없는 날은 0). BE는 발생일만 보내므로 x축이 비게 되는데,
+// 없는 날짜도 0으로 채워 축에 모든 날이 찍히고(=7/30일치) 0인 날이 그래프에 0으로 드러나게 한다.
+function buildDenseDailyTrend(agg: DailyTrendItem[], days: number): DailyTrendItem[] {
+  const byDate = new Map(agg.map((d) => [d.date, d]));
+  const out: DailyTrendItem[] = [];
+  const today = dayjs();
+  for (let i = days - 1; i >= 0; i--) {
+    const date = today.subtract(i, 'day').format('MM-DD'); // BE의 TO_CHAR('MM-DD')와 동일 포맷
+    out.push(byDate.get(date) ?? { date, fatal: 0, critical: 0, major: 0, minor: 0 });
+  }
+  return out;
+}
+
+// 전 구간 합이 0인 심각도는 렌더에서 제외 → stacked area에서 0 시리즈가 누적 상단에
+// 선으로 그려져 "데이터가 있는 것처럼" 보이는 문제를 막는다.
+function activeSeverities(rows: TrendRow[]): SevKey[] {
+  return SEV_AREAS.map((a) => a.key).filter((k) => rows.some((r) => (r[k] ?? 0) > 0));
+}
+
+const SEV_GRADIENTS = (
+  <defs>
+    <linearGradient id="gfatal" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="5%" stopColor={C.fatal} stopOpacity={0.4} />
+      <stop offset="95%" stopColor={C.fatal} stopOpacity={0.02} />
+    </linearGradient>
+    <linearGradient id="gcritical" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="5%" stopColor={C.critical} stopOpacity={0.3} />
+      <stop offset="95%" stopColor={C.critical} stopOpacity={0.02} />
+    </linearGradient>
+    <linearGradient id="gmajor" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="5%" stopColor={C.major} stopOpacity={0.25} />
+      <stop offset="95%" stopColor={C.major} stopOpacity={0.02} />
+    </linearGradient>
+    <linearGradient id="gminor" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="5%" stopColor={C.minor} stopOpacity={0.2} />
+      <stop offset="95%" stopColor={C.minor} stopOpacity={0.02} />
+    </linearGradient>
+  </defs>
+);
+
+// 심각도 스택 추이 차트 (시간대별·일별 공용)
+function SeverityTrendChart({ data, xKey, interval, tickFormatter }: {
+  data: (TrendRow & Record<string, unknown>)[];
+  xKey: string;
+  interval: number;
+  tickFormatter?: (v: string) => string;
+}) {
+  const active = activeSeverities(data);
+  return (
+    <ResponsiveContainer width="100%" height="100%">
+      <AreaChart data={data} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+        {SEV_GRADIENTS}
+        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+        <XAxis dataKey={xKey} tick={{ fill: C.muted, fontSize: 10 }} interval={interval} tickFormatter={tickFormatter} />
+        <YAxis tick={{ fill: C.muted, fontSize: 11 }} allowDecimals={false} domain={[0, (dataMax: number) => Math.max(dataMax, 5)]} />
+        <Tooltip content={<DarkTooltip />} />
+        <Legend formatter={(v) => <span style={{ color: C.muted, fontSize: '0.7rem' }}>{v}</span>} wrapperStyle={{ paddingTop: 8 }} />
+        {SEV_AREAS.filter((a) => active.includes(a.key)).map((a) => (
+          <Area key={a.key} type="monotone" dataKey={a.key} name={a.name} stackId="1"
+            stroke={a.color} fill={`url(#${a.grad})`} strokeWidth={2} dot={false} />
+        ))}
+      </AreaChart>
+    </ResponsiveContainer>
+  );
+}
+
+// ── 메인 컴포넌트 ─────────────────────────────────────────
 export default function OverviewTab() {
   const [days, setDays] = useState(7);
   const { data, isLoading } = useSummary(days);
@@ -211,10 +300,17 @@ export default function OverviewTab() {
   const { kpi, severityCounts, serviceRanking, detectTypeCounts, dailyTrend, recentCritical } = data;
 
   const sevTotal = severityCounts.reduce((s: number, r: { count: number }) => s + r.count, 0) || 1;
+  const periodLabel = isToday ? '오늘' : `최근 ${days}일`;
 
-  // 일별 추이 방어적 집계 — BE가 날짜당 1행으로 집계해 보내야 하나, 인시던트당 1행이
-  // 올 경우(중복 날짜) 차트가 x축 중복·톱니 모양으로 깨지므로 날짜별로 합산해 정규화한다.
-  const dailyTrendAgg = aggregateTrendByDate(dailyTrend);
+  // 데이터 유무 (빈 상태 가이드 노출 판단)
+  const hasSeverity = severityCounts.some((r: { count: number }) => r.count > 0);
+  const hasService = serviceRanking.length > 0;
+  const hasDetect = detectTypeCounts.length > 0;
+  const hourlyRows = hourlyData?.hourlyTrend ?? [];
+  const hasHourly = hourlyRows.some((h: TrendRow) => (h.fatal + h.critical + h.major + h.minor) > 0);
+
+  // 일별 추이: 날짜별 합산 후 최근 days일을 모두 0으로 채워 x축을 조밀하게(이슈 2·4)
+  const dailyTrendDense = buildDenseDailyTrend(aggregateTrendByDate(dailyTrend), days);
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -267,128 +363,140 @@ export default function OverviewTab() {
         </Grid>
       </Grid>
 
-      {/* ── 차트 Row 1: 심각도 도넛 + 서비스별 TOP5 + 검출유형 ── */}
+      {/* ── 차트 Row 1: 심각도 도넛 + 도메인별 + 검출유형 ── */}
       <Grid container spacing={2}>
 
         {/* 심각도별 분포 — 도넛 */}
         <Grid item xs={12} md={4}>
           <Card>
             <CardTitle>심각도별 분포</CardTitle>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              <ResponsiveContainer width={130} height={130}>
-                <PieChart>
-                  <Pie
-                    data={severityCounts}
-                    cx="50%" cy="50%"
-                    innerRadius={38} outerRadius={58}
-                    dataKey="count"
-                    paddingAngle={3}
-                    stroke="none"
-                  >
-                    {severityCounts.map((entry: { severity: string }, i: number) => (
-                      <Cell key={i} fill={SEV_COLOR[entry.severity] ?? '#6B7280'} />
-                    ))}
-                  </Pie>
+            {!hasSeverity ? (
+              <EmptyState message={`${periodLabel} 인시던트 없음`} height={130} />
+            ) : (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <ResponsiveContainer width={130} height={130}>
+                  <PieChart>
+                    <Pie
+                      data={severityCounts}
+                      cx="50%" cy="50%"
+                      innerRadius={38} outerRadius={58}
+                      dataKey="count"
+                      paddingAngle={3}
+                      stroke="none"
+                    >
+                      {severityCounts.map((entry: { severity: string }, i: number) => (
+                        <Cell key={i} fill={SEV_COLOR[entry.severity] ?? '#6B7280'} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      content={({ active, payload }) => {
+                        if (!active || !payload?.length) return null;
+                        const d = payload[0].payload as { severity: string; count: number };
+                        return (
+                          <Box sx={{ backgroundColor: '#0F172A', border: `1px solid ${C.border}`, borderRadius: 1.5, p: 1.25 }}>
+                            <Typography variant="caption" sx={{ color: '#fff' }}>
+                              {SEV_LABEL[d.severity]}: <strong>{d.count}건</strong> ({Math.round(d.count / sevTotal * 100)}%)
+                            </Typography>
+                          </Box>
+                        );
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, flex: 1 }}>
+                  {severityCounts.map((r: { severity: string; count: number }) => (
+                    <Box key={r.severity} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Box sx={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: SEV_COLOR[r.severity] ?? '#6B7280', flexShrink: 0 }} />
+                      <Typography variant="caption" sx={{ color: C.muted, flex: 1, fontSize: '0.7rem' }}>
+                        {SEV_LABEL[r.severity]}
+                      </Typography>
+                      <Typography variant="caption" fontWeight={700} sx={{ color: SEV_COLOR[r.severity] ?? '#fff', fontSize: '0.75rem' }}>
+                        {r.count}
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: C.muted, fontSize: '0.65rem', width: 32, textAlign: 'right' }}>
+                        {Math.round(r.count / sevTotal * 100)}%
+                      </Typography>
+                    </Box>
+                  ))}
+                </Box>
+              </Box>
+            )}
+          </Card>
+        </Grid>
+
+        {/* 도메인별 인시던트 총량 — 수평 바 (dlgt_unit_svc = KOS-도메인 단위) */}
+        <Grid item xs={12} md={4}>
+          <Card>
+            <CardTitle>도메인별 인시던트 총량</CardTitle>
+            {!hasService ? (
+              <EmptyState message={`${periodLabel} 인시던트 없음`} />
+            ) : (
+              <ResponsiveContainer width="100%" height={150}>
+                <BarChart
+                  data={serviceRanking}
+                  layout="vertical"
+                  margin={{ top: 0, right: 24, left: 0, bottom: 0 }}
+                >
+                  <XAxis type="number" hide />
+                  <YAxis
+                    type="category"
+                    dataKey="serviceName"
+                    tick={{ fill: C.muted, fontSize: 11 }}
+                    width={90}
+                    tickFormatter={(v: string) => v.replace('KOS-', '')}
+                  />
                   <Tooltip
                     content={({ active, payload }) => {
                       if (!active || !payload?.length) return null;
-                      const d = payload[0].payload as { severity: string; count: number };
+                      const d = payload[0].payload as { serviceName: string; count: number };
                       return (
                         <Box sx={{ backgroundColor: '#0F172A', border: `1px solid ${C.border}`, borderRadius: 1.5, p: 1.25 }}>
-                          <Typography variant="caption" sx={{ color: '#fff' }}>
-                            {SEV_LABEL[d.severity]}: <strong>{d.count}건</strong> ({Math.round(d.count / sevTotal * 100)}%)
-                          </Typography>
+                          <Typography variant="caption" sx={{ color: '#fff' }}>{d.serviceName}: <strong>{d.count}건</strong></Typography>
                         </Box>
                       );
                     }}
                   />
-                </PieChart>
+                  <Bar dataKey="count" radius={[0, 4, 4, 0]} maxBarSize={14}>
+                    {serviceRanking.map((_: unknown, i: number) => (
+                      <Cell key={i} fill={`hsl(${240 - i * 30}, 70%, ${60 - i * 4}%)`} />
+                    ))}
+                  </Bar>
+                </BarChart>
               </ResponsiveContainer>
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, flex: 1 }}>
-                {severityCounts.map((r: { severity: string; count: number }) => (
-                  <Box key={r.severity} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Box sx={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: SEV_COLOR[r.severity] ?? '#6B7280', flexShrink: 0 }} />
-                    <Typography variant="caption" sx={{ color: C.muted, flex: 1, fontSize: '0.7rem' }}>
-                      {SEV_LABEL[r.severity]}
-                    </Typography>
-                    <Typography variant="caption" fontWeight={700} sx={{ color: SEV_COLOR[r.severity] ?? '#fff', fontSize: '0.75rem' }}>
-                      {r.count}
-                    </Typography>
-                    <Typography variant="caption" sx={{ color: C.muted, fontSize: '0.65rem', width: 32, textAlign: 'right' }}>
-                      {Math.round(r.count / sevTotal * 100)}%
-                    </Typography>
-                  </Box>
-                ))}
-              </Box>
-            </Box>
+            )}
           </Card>
         </Grid>
 
-        {/* 서비스별 인시던트 TOP 5 — 수평 바 */}
+        {/* 알람 검출기준별 분포 (detect_type) */}
         <Grid item xs={12} md={4}>
           <Card>
-            <CardTitle>서비스별 인시던트 TOP 5</CardTitle>
-            <ResponsiveContainer width="100%" height={150}>
-              <BarChart
-                data={serviceRanking}
-                layout="vertical"
-                margin={{ top: 0, right: 24, left: 0, bottom: 0 }}
-              >
-                <XAxis type="number" hide />
-                <YAxis
-                  type="category"
-                  dataKey="serviceName"
-                  tick={{ fill: C.muted, fontSize: 11 }}
-                  width={90}
-                  tickFormatter={(v: string) => v.replace('KOS-', '')}
-                />
-                <Tooltip
-                  content={({ active, payload }) => {
-                    if (!active || !payload?.length) return null;
-                    const d = payload[0].payload as { serviceName: string; count: number };
-                    return (
-                      <Box sx={{ backgroundColor: '#0F172A', border: `1px solid ${C.border}`, borderRadius: 1.5, p: 1.25 }}>
-                        <Typography variant="caption" sx={{ color: '#fff' }}>{d.serviceName}: <strong>{d.count}건</strong></Typography>
-                      </Box>
-                    );
-                  }}
-                />
-                <Bar dataKey="count" radius={[0, 4, 4, 0]} maxBarSize={14}>
-                  {serviceRanking.map((_: unknown, i: number) => (
-                    <Cell key={i} fill={`hsl(${240 - i * 30}, 70%, ${60 - i * 4}%)`} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </Card>
-        </Grid>
-
-        {/* 검출유형별 분포 */}
-        <Grid item xs={12} md={4}>
-          <Card>
-            <CardTitle>검출 유형별 분포</CardTitle>
-            <ResponsiveContainer width="100%" height={150}>
-              <BarChart data={detectTypeCounts} margin={{ top: 0, right: 8, left: -20, bottom: 0 }}>
-                <XAxis dataKey="label" tick={{ fill: C.muted, fontSize: 10 }} />
-                <YAxis tick={{ fill: C.muted, fontSize: 10 }} />
-                <Tooltip
-                  content={({ active, payload }) => {
-                    if (!active || !payload?.length) return null;
-                    const d = payload[0].payload as { label: string; count: number };
-                    return (
-                      <Box sx={{ backgroundColor: '#0F172A', border: `1px solid ${C.border}`, borderRadius: 1.5, p: 1.25 }}>
-                        <Typography variant="caption" sx={{ color: '#fff' }}>{d.label}: <strong>{d.count}건</strong></Typography>
-                      </Box>
-                    );
-                  }}
-                />
-                <Bar dataKey="count" radius={[4, 4, 0, 0]} maxBarSize={32}>
-                  {detectTypeCounts.map((_: unknown, i: number) => (
-                    <Cell key={i} fill={DETECT_COLORS[i % DETECT_COLORS.length]} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+            <CardTitle>알람 검출기준</CardTitle>
+            {!hasDetect ? (
+              <EmptyState message={`${periodLabel} 인시던트 없음`} />
+            ) : (
+              <ResponsiveContainer width="100%" height={150}>
+                <BarChart data={detectTypeCounts} margin={{ top: 0, right: 8, left: -20, bottom: 0 }}>
+                  <XAxis dataKey="label" tick={{ fill: C.muted, fontSize: 10 }} />
+                  <YAxis tick={{ fill: C.muted, fontSize: 10 }} />
+                  <Tooltip
+                    content={({ active, payload }) => {
+                      if (!active || !payload?.length) return null;
+                      const d = payload[0].payload as { label: string; count: number };
+                      return (
+                        <Box sx={{ backgroundColor: '#0F172A', border: `1px solid ${C.border}`, borderRadius: 1.5, p: 1.25 }}>
+                          <Typography variant="caption" sx={{ color: '#fff' }}>{d.label}: <strong>{d.count}건</strong></Typography>
+                        </Box>
+                      );
+                    }}
+                  />
+                  <Bar dataKey="count" radius={[4, 4, 0, 0]} maxBarSize={32}>
+                    {detectTypeCounts.map((_: unknown, i: number) => (
+                      <Cell key={i} fill={DETECT_COLORS[i % DETECT_COLORS.length]} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </Card>
         </Grid>
       </Grid>
@@ -407,96 +515,24 @@ export default function OverviewTab() {
                 </Typography>
               )}
             </Box>
-            <Box sx={{ flex: 1, minHeight: 0 }}>
+            <Box sx={{ flex: 1, minHeight: 220 }}>
               {isToday ? (
                 isHourlyLoading || !hourlyData ? (
                   <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
                     <CircularProgress size={24} />
                   </Box>
+                ) : !hasHourly ? (
+                  <EmptyState message="오늘 발생한 인시던트 없음" height="100%" />
                 ) : (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={hourlyData.hourlyTrend} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="gfatal" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%"  stopColor={C.fatal} stopOpacity={0.4} />
-                          <stop offset="95%" stopColor={C.fatal} stopOpacity={0.02} />
-                        </linearGradient>
-                        <linearGradient id="gcritical" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%"  stopColor={C.critical} stopOpacity={0.3} />
-                          <stop offset="95%" stopColor={C.critical} stopOpacity={0.02} />
-                        </linearGradient>
-                        <linearGradient id="gmajor" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%"  stopColor={C.major} stopOpacity={0.25} />
-                          <stop offset="95%" stopColor={C.major} stopOpacity={0.02} />
-                        </linearGradient>
-                        <linearGradient id="gminor" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%"  stopColor={C.minor} stopOpacity={0.2} />
-                          <stop offset="95%" stopColor={C.minor} stopOpacity={0.02} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                      <XAxis dataKey="hour" tick={{ fill: C.muted, fontSize: 10 }} interval={1} />
-                      <YAxis tick={{ fill: C.muted, fontSize: 11 }} allowDecimals={false} domain={[0, (dataMax: number) => Math.max(dataMax, 5)]} />
-                      <Tooltip content={<DarkTooltip />} />
-                      <Legend
-                        formatter={(v) => <span style={{ color: C.muted, fontSize: '0.7rem' }}>{v}</span>}
-                        wrapperStyle={{ paddingTop: 8 }}
-                      />
-                      <Area type="monotone" dataKey="fatal"    name="Fatal"    stackId="1"
-                        stroke={C.fatal}    fill="url(#gfatal)"    strokeWidth={2} dot={false} />
-                      <Area type="monotone" dataKey="critical" name="Critical" stackId="1"
-                        stroke={C.critical} fill="url(#gcritical)" strokeWidth={2} dot={false} />
-                      <Area type="monotone" dataKey="major"    name="Major"    stackId="1"
-                        stroke={C.major}    fill="url(#gmajor)"    strokeWidth={2} dot={false} />
-                      <Area type="monotone" dataKey="minor"    name="Minor"    stackId="1"
-                        stroke={C.minor}    fill="url(#gminor)"    strokeWidth={2} dot={false} />
-                    </AreaChart>
-                  </ResponsiveContainer>
+                  <SeverityTrendChart data={hourlyRows} xKey="hour" interval={1} />
                 )
               ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={dailyTrendAgg} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="gfatal" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%"  stopColor={C.fatal} stopOpacity={0.4} />
-                        <stop offset="95%" stopColor={C.fatal} stopOpacity={0.02} />
-                      </linearGradient>
-                      <linearGradient id="gcritical" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%"  stopColor={C.critical} stopOpacity={0.3} />
-                        <stop offset="95%" stopColor={C.critical} stopOpacity={0.02} />
-                      </linearGradient>
-                      <linearGradient id="gmajor" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%"  stopColor={C.major} stopOpacity={0.25} />
-                        <stop offset="95%" stopColor={C.major} stopOpacity={0.02} />
-                      </linearGradient>
-                      <linearGradient id="gminor" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%"  stopColor={C.minor} stopOpacity={0.2} />
-                        <stop offset="95%" stopColor={C.minor} stopOpacity={0.02} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                    <XAxis
-                      dataKey="date"
-                      tick={{ fill: C.muted, fontSize: 10 }}
-                      interval={Math.max(0, Math.floor(dailyTrendAgg.length / 8))}
-                      tickFormatter={(v: string) => (typeof v === 'string' && v.length >= 10 ? v.slice(5) : v)}
-                    />
-                    <YAxis tick={{ fill: C.muted, fontSize: 11 }} allowDecimals={false} domain={[0, (dataMax: number) => Math.max(dataMax, 5)]} />
-                    <Tooltip content={<DarkTooltip />} />
-                    <Legend
-                      formatter={(v) => <span style={{ color: C.muted, fontSize: '0.7rem' }}>{v}</span>}
-                      wrapperStyle={{ paddingTop: 8 }}
-                    />
-                    <Area type="monotone" dataKey="fatal"    name="Fatal"    stackId="1"
-                      stroke={C.fatal}    fill="url(#gfatal)"    strokeWidth={2} dot={false} />
-                    <Area type="monotone" dataKey="critical" name="Critical" stackId="1"
-                      stroke={C.critical} fill="url(#gcritical)" strokeWidth={2} dot={false} />
-                    <Area type="monotone" dataKey="major"    name="Major"    stackId="1"
-                      stroke={C.major}    fill="url(#gmajor)"    strokeWidth={2} dot={false} />
-                    <Area type="monotone" dataKey="minor"    name="Minor"    stackId="1"
-                      stroke={C.minor}    fill="url(#gminor)"    strokeWidth={2} dot={false} />
-                  </AreaChart>
-                </ResponsiveContainer>
+                <SeverityTrendChart
+                  data={dailyTrendDense}
+                  xKey="date"
+                  interval={Math.max(0, Math.floor(dailyTrendDense.length / 8))}
+                  tickFormatter={(v: string) => (typeof v === 'string' && v.length >= 10 ? v.slice(5) : v)}
+                />
               )}
             </Box>
           </Card>
@@ -508,9 +544,7 @@ export default function OverviewTab() {
             <CardTitle>최근 Fatal·Critical 인시던트</CardTitle>
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, flex: 1 }}>
               {recentCritical.length === 0 ? (
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1, py: 4 }}>
-                  <Typography variant="caption" sx={{ color: C.muted }}>활성 인시던트 없음 ✓</Typography>
-                </Box>
+                <EmptyState message="활성 인시던트 없음" height="100%" />
               ) : recentCritical.map((inc: { id: string; alarmHstSeq: string; serviceName: string; alarmName: string; thresholdValue: number; threshold: number; occurredAt: string; severity?: string }) => {
                 const isFatal = inc.severity === 'fatal';
                 const accentColor = isFatal ? C.fatal : C.critical;

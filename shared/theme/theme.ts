@@ -148,6 +148,69 @@ const theme = createTheme({
         },
       },
     },
+    // 드롭다운(Select) 팝오버 — 닫힌 입력창은 각 화면 스타일, 열린 메뉴는 여기서 앱 전역 통일
+    MuiSelect: {
+      defaultProps: {
+        MenuProps: {
+          // 입력창과 시각적으로 이어지도록 하단 정렬 + 간격
+          anchorOrigin: { vertical: 'bottom', horizontal: 'left' },
+          transformOrigin: { vertical: 'top', horizontal: 'left' },
+          slotProps: {
+            paper: {
+              sx: {
+                mt: 0.5,
+                backgroundColor: '#1F2937',
+                backgroundImage: 'none',
+                border: '1px solid rgba(255,255,255,0.1)',
+                borderRadius: 2,
+                boxShadow: '0 8px 24px rgba(0,0,0,0.45)',
+                // 메뉴 아이템 리스트 상하 패딩 축소로 조밀하게
+                '& .MuiList-root': { py: 0.5 },
+              },
+            },
+          },
+        },
+      },
+      styleOverrides: {
+        // 닫힌 상태 Select 아이콘 색 통일
+        icon: {
+          color: '#9CA3AF',
+        },
+      },
+    },
+    MuiMenu: {
+      styleOverrides: {
+        paper: {
+          backgroundColor: '#1F2937',
+          backgroundImage: 'none',
+          border: '1px solid rgba(255,255,255,0.1)',
+          borderRadius: 8,
+          boxShadow: '0 8px 24px rgba(0,0,0,0.45)',
+        },
+      },
+    },
+    MuiMenuItem: {
+      styleOverrides: {
+        root: {
+          fontSize: '0.82rem',
+          borderRadius: 6,
+          marginLeft: 4,
+          marginRight: 4,
+          minHeight: 34,
+          transition: 'background-color 0.12s ease',
+          '&:hover': {
+            backgroundColor: 'rgba(255,255,255,0.06)',
+          },
+          '&.Mui-selected': {
+            color: '#A5B4FC',
+            backgroundColor: 'rgba(99,102,241,0.16)',
+            '&:hover': {
+              backgroundColor: 'rgba(99,102,241,0.24)',
+            },
+          },
+        },
+      },
+    },
     MuiIconButton: {
       styleOverrides: {
         root: {

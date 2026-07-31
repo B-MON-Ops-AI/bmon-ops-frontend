@@ -15,6 +15,8 @@ import {
 } from 'recharts';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
+import Chip from '@mui/material/Chip';
+import CircularProgress from '@mui/material/CircularProgress';
 import dayjs from 'dayjs';
 import type { DomainOverlayPoint } from '@/entities/dashboard';
 
@@ -70,7 +72,18 @@ function ChartTooltip({ active, payload, label }: {
   );
 }
 
-export default function HourlyOverlayChart({ data }: { data: DomainOverlayPoint[] }) {
+// 이상 지점 판정 — 오류 발생 / 오류율↑ / 응답 급증
+function isAnomaly(d: DomainOverlayPoint): boolean {
+  return d.errCount > 0 || (d.errRate ?? 0) >= 1 || (d.maxResp ?? 0) >= 5000;
+}
+
+export default function HourlyOverlayChart({ data, scopeLabel, onClear, loading, onAnomalyClick }: {
+  data: DomainOverlayPoint[];
+  scopeLabel?: string;   // 선택된 서비스명 (없으면 도메인 전체)
+  onClear?: () => void;  // '전체 보기'로 선택 해제
+  loading?: boolean;
+  onAnomalyClick?: () => void; // 이상 지점 마커 클릭 → 알람 설계 탭
+}) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -80,6 +93,10 @@ export default function HourlyOverlayChart({ data }: { data: DomainOverlayPoint[
   if (!data || data.length === 0) return null;
 
   const maxErr = Math.max(...data.map((d) => d.errCount), 1);
+  // 이상 시각 = 상단 노란 삼각형 마커. 전용 축(anom, anomZ)으로 위치·크기를 고정해
+  // 오류호출 버블과 스케일을 공유하지 않게 한다(예전 '삼각형 깨짐' 원인 제거). anom=0.9 → 상단 근처.
+  const chartData = data.map((d) => ({ ...d, anom: isAnomaly(d) ? 0.9 : (null as number | null) }));
+  const anomCount = chartData.filter((d) => d.anom != null).length;
 
   return (
     <Box
@@ -88,13 +105,52 @@ export default function HourlyOverlayChart({ data }: { data: DomainOverlayPoint[
         backgroundColor: 'rgba(255,255,255,0.02)', p: 1.75, pb: 1,
       }}
     >
-      <Typography sx={{ fontSize: '0.72rem', fontWeight: 700, color: 'text.secondary', letterSpacing: '0.04em', mb: 1 }}>
-        호출 추이 (정상 · 응답 · 오류)
-      </Typography>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, flexWrap: 'wrap' }}>
+        <Typography sx={{ fontSize: '0.72rem', fontWeight: 700, color: 'text.secondary', letterSpacing: '0.04em' }}>
+          호출 추이 (정상 · 응답 · 오류)
+        </Typography>
+        {scopeLabel ? (
+          <Chip
+            label={scopeLabel}
+            size="small"
+            onDelete={onClear}
+            sx={{
+              height: 20, maxWidth: 320, fontSize: '0.62rem', fontFamily: 'monospace',
+              backgroundColor: 'rgba(99,102,241,0.15)', color: '#A5B4FC',
+              border: '1px solid rgba(99,102,241,0.35)',
+              '& .MuiChip-label': { px: 0.75, overflow: 'hidden', textOverflow: 'ellipsis' },
+              '& .MuiChip-deleteIcon': { color: '#A5B4FC', fontSize: 15, '&:hover': { color: '#fff' } },
+            }}
+          />
+        ) : (
+          <Chip label="도메인 전체" size="small"
+            sx={{ height: 20, fontSize: '0.62rem', backgroundColor: 'rgba(255,255,255,0.06)', color: 'text.disabled', '& .MuiChip-label': { px: 0.75 } }} />
+        )}
+        {loading && <CircularProgress size={12} sx={{ color: '#818CF8' }} />}
+        {anomCount > 0 && (
+          <Chip
+            label={`⚠ 이상 지점 ${anomCount}`}
+            size="small"
+            onClick={onAnomalyClick}
+            sx={{
+              height: 20, fontSize: '0.62rem', fontWeight: 700,
+              backgroundColor: 'rgba(251,191,36,0.14)', color: '#FBBF24',
+              border: '1px solid rgba(251,191,36,0.4)', cursor: onAnomalyClick ? 'pointer' : 'default',
+              '& .MuiChip-label': { px: 0.75 },
+              '&:hover': onAnomalyClick ? { backgroundColor: 'rgba(251,191,36,0.22)' } : {},
+            }}
+          />
+        )}
+        {scopeLabel && (
+          <Typography sx={{ fontSize: '0.6rem', color: 'text.disabled' }}>
+            행을 다시 클릭하거나 × 로 도메인 전체로 돌아갑니다
+          </Typography>
+        )}
+      </Box>
       <Box sx={{ height: 260, overflow: 'hidden' }}>
         {mounted && (
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+            <ComposedChart data={chartData} margin={{ top: 16, right: 8, bottom: 0, left: 0 }}>
               <CartesianGrid stroke="rgba(255,255,255,0.05)" vertical={false} />
               <XAxis dataKey="time" tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }}
                 axisLine={{ stroke: 'rgba(255,255,255,0.1)' }} tickLine={false} minTickGap={16} />
@@ -104,7 +160,11 @@ export default function HourlyOverlayChart({ data }: { data: DomainOverlayPoint[
                 axisLine={false} tickLine={false} tickFormatter={(v) => fmtMs(Number(v))} width={44} />
               {/* 오류호출 버블용 숨김 축 (자체 스케일로 세로 위치) */}
               <YAxis yAxisId="err" hide domain={[0, maxErr * 1.2]} />
+              {/* 이상 삼각형용 숨김 축 (상단 고정) */}
+              <YAxis yAxisId="anom" hide domain={[0, 1]} />
               <ZAxis dataKey="errCount" range={[0, 340]} />
+              {/* 이상 삼각형 전용 크기축 — 고정(오류호출 버블과 스케일 분리) */}
+              <ZAxis zAxisId="anomZ" range={[150, 150]} />
               <Tooltip content={<ChartTooltip />} cursor={{ stroke: 'rgba(255,255,255,0.15)' }} />
               <Legend wrapperStyle={{ fontSize: '0.68rem', paddingTop: 4 }} iconSize={9} />
               <Line yAxisId="left" type="monotone" dataKey="normal" name="정상호출"
@@ -113,6 +173,10 @@ export default function HourlyOverlayChart({ data }: { data: DomainOverlayPoint[
                 stroke={C_RESP} strokeWidth={1.5} dot={false} />
               <Scatter yAxisId="err" dataKey="errCount" name="오류호출"
                 fill={C_ERR} fillOpacity={0.5} />
+              <Scatter yAxisId="anom" zAxisId="anomZ" dataKey="anom" name="이상 지점"
+                fill="#FBBF24" shape="triangle" stroke="rgba(15,18,28,0.9)" strokeWidth={1}
+                onClick={onAnomalyClick}
+                style={{ cursor: onAnomalyClick ? 'pointer' : 'default' }} />
             </ComposedChart>
           </ResponsiveContainer>
         )}

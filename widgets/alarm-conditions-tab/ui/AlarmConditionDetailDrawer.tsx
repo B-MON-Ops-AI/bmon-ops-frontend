@@ -28,6 +28,7 @@ dayjs.extend(relativeTime);
 dayjs.locale('ko');
 
 const LEVEL_CONFIG: Record<AlarmLevel, { label: string; color: string; bg: string }> = {
+  Fatal:    { label: 'Fatal',    color: '#EF4444', bg: 'rgba(220,38,38,0.14)' },
   Critical: { label: 'Critical', color: '#F87171', bg: 'rgba(239,68,68,0.1)' },
   Major:    { label: 'Major',    color: '#FB923C', bg: 'rgba(249,115,22,0.1)' },
   Minor:    { label: 'Minor',    color: '#FBBF24', bg: 'rgba(245,158,11,0.1)' },
@@ -41,8 +42,8 @@ const TRIGGER_CONFIG: Record<TriggerStatus, { label: string; color: string; bg: 
 };
 
 const DETECT_TYPE_LABEL: Record<string, string> = {
-  ERR_S: '시스템오류', ERR_E: '외부오류', ERR_RATE: '오류율(%)',
-  RPY_TIME: '응답시간(ms)', CALL_CASCNT: '호출건수',
+  ERR_S: '시스템오류', ERR_E: '비즈니스 오류', ERR_RATE: '오류율(%)',
+  RPY_TIME: '응답시간(ms)', CALL_CASCNT: '호출수',
 };
 const DETECT_TERM_LABEL: Record<string, string> = {
   MIN1: '1분', MIN5: '5분', MIN10: '10분', MIN30: '30분', HOUR1: '1시간', DAY1: '1일',

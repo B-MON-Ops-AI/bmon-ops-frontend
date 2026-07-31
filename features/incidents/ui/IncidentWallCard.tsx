@@ -19,10 +19,10 @@ dayjs.locale('ko');
 
 const detectTypeLabels: Record<string, string> = {
   ERR_S: '시스템오류',
-  RPY_TIME: '응답시간',
-  ERR_RATE: '오류율',
-  ERR_E: '외부오류',
-  CALL_CASCNT: '호출건수',
+  RPY_TIME: '응답시간(ms)',
+  ERR_RATE: '오류율(%)',
+  ERR_E: '비즈니스 오류',
+  CALL_CASCNT: '호출수',
 };
 
 const detectTermLabels: Record<string, string> = {

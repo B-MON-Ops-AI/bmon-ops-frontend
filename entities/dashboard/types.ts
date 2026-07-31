@@ -14,9 +14,10 @@ export interface ChartDataPoint {
 
 export type DomainId = 'all' | 'order' | 'lt' | 'b2ccrm' | 'rds';
 
-/** 집계·연동 주기 — 부하 방지를 위해 실시간(1분) 대신 10분/1일 주기 집계
- *  (10m → bymi 분단위 / 1d → byhr 시간단위. BE PERIOD_CONFIG와 대응) */
-export type DomainPeriod = '10m' | '1d';
+/** 모니터링(근실시간 상태 조회) 이동창 주기 — 둘 다 bymi(분단위) 스냅샷.
+ *  10m → 최근 10분 / 1h → 최근 1시간 (BE PERIOD_CONFIG와 대응).
+ *  ⚠ 알람 설계(제안·등록)는 이 토글과 무관하게 항상 byhr 축적 통계 기준. */
+export type DomainPeriod = '10m' | '1h';
 
 /** 특화 카드(하단) 분해 축 */
 export type BreakdownType = 'service' | 'channel' | 'esb';
@@ -34,6 +35,9 @@ export interface DomainBreakdownItem {
   avgResponseMs: number;
   maxResponseMs: number;
   responseStdDev: number; // 표준편차
+  // 최신일(byhr) 시간대 peak — AI 알람 제안의 '현재값'과 동일 기준(1:1 대조용)
+  peakErrorRate?: number | null;    // 최신일 시간대 최고 오류율(%)
+  peakMaxResponseMs?: number | null; // 최신일 시간대 최고 최대응답(ms)
 }
 
 /** 시간대별 오버레이 1버킷 (정상호출·평균응답·오류호출 겹쳐보기 + hover용 전 지표) */
@@ -75,7 +79,7 @@ export interface DomainMetrics {
   throughput: number;              // 처리량(건) = Σ deal_i
   errorRate: number | null;        // (err_s+err_e)/n · null = 실측 무오류
   errS: number;                    // 시스템오류 건
-  errE: number;                    // 외부오류 건
+  errE: number;                    // 비즈니스 오류(ERR_E) 건
   avgResponseMs: number;           // Σtot_rpy / n
   maxResponseMs: number;           // max(max_rpy_time)
   responseStdDev: number;          // √(tot_sqr/n − avg²)
@@ -86,13 +90,26 @@ export interface DomainMetrics {
   hourlyOverlay: DomainOverlayPoint[]; // 시간대별 정상·응답·오류 겹쳐보기 (image6 스타일)
   breakdownType: BreakdownType;
   breakdownTitle: string;
-  breakdown: DomainBreakdownItem[];
+  breakdown: DomainBreakdownItem[];              // 처리량(정상 I) 상위
+  breakdownByErrorRate?: DomainBreakdownItem[];  // [모니터링] 현재창 오류율((S+E)/n) 상위
+  breakdownByErrorCount?: DomainBreakdownItem[]; // [모니터링] 현재창 오류건수(S+E) 상위
+  peakAsOf?: string | null;        // 시간대 peak 기준일(byhr 최신 수집일, YYYY-MM-DD)
   source: string;                  // 근거 원천 표기 (예: "ch_ingrs·ch_svc")
 }
 
 export interface DomainMetricsResponse {
-  period: DomainPeriod;    // 집계 주기 ('10m' → bymi 분단위 / '1d' → byhr 시간단위)
-  windowMinutes: number;   // 집계 시간창 (10 또는 1440). 부하 방지를 위해 1분 미채택
+  period: DomainPeriod;    // 모니터링 이동창 ('10m'/'1h', 둘 다 bymi 분단위)
+  windowMinutes: number;   // 집계 시간창 (10 또는 60). 부하 방지를 위해 1분 미채택
   asOf: string;            // 기준 시각 = 마지막으로 완결된 집계 버킷 (ISO)
+  peakAsOf?: string | null; // 시간대 peak 기준일(byhr 최신 수집일, YYYY-MM-DD)
   domains: DomainMetrics[];
+}
+
+/** 단일 서비스 호출 추이 (처리량 상위 서비스 클릭 시) */
+export interface ServiceTrendResponse {
+  period: DomainPeriod;
+  asOf: string;
+  svcNm: string;
+  opNm: string;
+  hourlyOverlay: DomainOverlayPoint[];
 }

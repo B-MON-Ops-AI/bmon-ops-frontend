@@ -4,5 +4,5 @@
  * @module features/dashboard
  */
 export { default as MiniChart } from './ui/MiniChart';
-export { useSummary, useHourlyTrend, useDomainMetrics, DOMAIN_POLL_MS } from './model/useDashboard';
+export { useSummary, useHourlyTrend, useDomainMetrics, useServiceTrend, DOMAIN_POLL_MS } from './model/useDashboard';
 export { dashboardApi } from './api/dashboard.api';

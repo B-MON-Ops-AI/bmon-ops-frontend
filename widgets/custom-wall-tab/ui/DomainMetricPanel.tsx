@@ -2,8 +2,9 @@
 
 /**
  * @file DomainMetricPanel.tsx
- * @description 커스텀 Wall 도메인별 실측 지표 패널
- *   KPI 스트립 + 시간대 오버레이 차트 + granular 서비스 목록(I/D·S/E·σ, 행→알람 걸기) + 금일 알람 이력.
+ * @description 커스텀 Wall 모니터링 패널 — 현재창(bymi 이동창) 실측 상태만.
+ *   KPI 스트립 + 시간대 오버레이 차트 + granular 서비스 목록(I/D·S/E·σ) + 금일 알람 이력.
+ *   ⚠ 알람 등록은 여기서 하지 않는다. 행의 알람 아이콘 → 알람 설계 탭으로 전환(byhr 축적 통계 기준).
  * @module widgets/custom-wall-tab/ui
  */
 
@@ -14,18 +15,70 @@ import Chip from '@mui/material/Chip';
 import Tooltip from '@mui/material/Tooltip';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import dayjs from 'dayjs';
-import { MiniChart } from '@/features/dashboard';
+import { MiniChart, useServiceTrend } from '@/features/dashboard';
 import { useAlarmGaps } from '@/features/alarm-conditions';
-import type { ChartDataPoint, DomainMetrics, DomainBreakdownItem, DomainAlarmEvent, DomainAlarmStatus } from '@/entities/dashboard';
-import type { AlarmGapProposal } from '@/entities/alarm-condition';
+import type { ChartDataPoint, DomainMetrics, DomainBreakdownItem, DomainAlarmEvent, DomainAlarmStatus, DomainPeriod } from '@/entities/dashboard';
 import AlarmEventDetailDialog from './AlarmEventDetailDialog';
 import HourlyOverlayChart from './HourlyOverlayChart';
-import AlarmRegisterDialog from './AlarmRegisterDialog';
 import BreakdownTable from './BreakdownTable';
 
 // ── 값 포맷 ────────────────────────────────────────────────────
 function fmtMs(ms: number): string {
   return ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${Math.round(ms)}ms`;
+}
+
+// 서비스명/OP 검색 필터 (모듈 레벨 안정 함수 — useMemo 메모이제이션 보존)
+const filterBySvc = (list: DomainBreakdownItem[], q: string): DomainBreakdownItem[] =>
+  q ? list.filter((b) => b.name.toLowerCase().includes(q) || (b.opName ?? '').toLowerCase().includes(q)) : list;
+
+// ── 오류율/오류건수 상위 서비스 섹션 (서버가 사전 랭킹, 처리량 목록과 별개) ──
+function ErrorRankSection({
+  title, hint, list, total, variant, q, aiKeys, onAlarm, onSelect, selectedKey,
+}: {
+  title: string;
+  hint: string;
+  list: DomainBreakdownItem[];
+  total: number;
+  variant: 'errrate' | 'errcount';
+  q: string;
+  aiKeys: Set<string>;
+  onAlarm: (b: DomainBreakdownItem) => void;
+  onSelect: (b: DomainBreakdownItem) => void;
+  selectedKey: string | null;
+}) {
+  return (
+    <Box sx={{ borderRadius: 2, border: '1px solid rgba(255,255,255,0.07)', backgroundColor: 'rgba(255,255,255,0.02)', overflow: 'hidden' }}>
+      <Box sx={{ px: 1.75, py: 1.25, borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Typography sx={{ fontSize: '0.72rem', fontWeight: 700, color: 'text.secondary', letterSpacing: '0.04em' }}>
+          {title}
+        </Typography>
+        <Chip label={`${list.length}${q ? `/${total}` : ''}`} size="small"
+          sx={{ height: 16, fontSize: '0.58rem', backgroundColor: 'rgba(248,113,113,0.14)', color: '#F87171', '& .MuiChip-label': { px: 0.75 } }} />
+      </Box>
+      <Box sx={{ px: 1.75, pt: 0.75 }}>
+        <Typography sx={{ fontSize: '0.6rem', color: 'text.disabled', lineHeight: 1.6 }}>
+          {hint}{' · '}
+          <Box component="span" sx={{ color: '#A5B4FC' }}>행 클릭 시 위 호출 추이가 해당 서비스로 전환</Box>됩니다.
+        </Typography>
+      </Box>
+      {list.length === 0 ? (
+        <Box sx={{ px: 1.75, py: 2.5, textAlign: 'center' }}>
+          <Typography sx={{ fontSize: '0.72rem', color: 'text.disabled' }}>
+            {q ? '검색과 일치하는 서비스가 없습니다.' : '오류가 발생한 서비스가 없습니다.'}
+          </Typography>
+        </Box>
+      ) : (
+        <BreakdownTable
+          items={list}
+          aiKeys={aiKeys}
+          onAlarm={onAlarm}
+          onSelect={onSelect}
+          selectedKey={selectedKey}
+          variant={variant}
+        />
+      )}
+    </Box>
+  );
 }
 
 const LEVEL_COLOR: Record<string, string> = {
@@ -37,37 +90,6 @@ const STATUS_CONFIG: Record<DomainAlarmStatus, { label: string; color: string; b
   resolved: { label: '해결',   color: '#818CF8', bg: 'rgba(99,102,241,0.12)' },
   cleared:  { label: '자동해소', color: '#34D399', bg: 'rgba(52,211,153,0.12)' },
 };
-
-// ── 행 통계에서 수동 알람 제안 기본값 생성 (AI 공백 제안이 없을 때) ──
-function levelByRate(v: number): AlarmGapProposal['alarmLevel'] {
-  return v >= 50 ? 'Critical' : v >= 20 ? 'Major' : 'Minor';
-}
-function levelByRpy(v: number): AlarmGapProposal['alarmLevel'] {
-  return v >= 10000 ? 'Critical' : v >= 5000 ? 'Major' : 'Minor';
-}
-function manualProposal(b: DomainBreakdownItem, domnId: string): AlarmGapProposal {
-  const base = {
-    svcNm: b.name, opNm: b.opName, domnId, type: '수동',
-    baseline: null as number | null, breachHits: 0,
-    detectTerm: 'HOUR1' as const, detectDow: '2345670',
-    detectStTime: '0000', detectFnsTime: '2359',
-    reasons: ['운영자 지정 (현재 통계 기반 기본값)'],
-  };
-  const er = b.errorRate ?? 0;
-  if (er >= 0.5) {
-    return { ...base, metric: '오류율', detectType: 'ERR_RATE', comprType: 'COMPR_MRTH',
-      unit: '%', peak: er, proposedThreshold: Math.min(100, Math.max(Math.ceil(er * 1.5), 5)),
-      alarmLevel: levelByRate(er) };
-  }
-  if (b.maxResponseMs >= 3000) {
-    return { ...base, metric: '최대응답', detectType: 'RPY_TIME', comprType: 'COMPR_MRTH',
-      unit: 'ms', peak: b.maxResponseMs,
-      proposedThreshold: Math.max(Math.round((b.maxResponseMs * 1.2) / 100) * 100, 5000),
-      alarmLevel: levelByRpy(b.maxResponseMs) };
-  }
-  return { ...base, metric: '오류율', detectType: 'ERR_RATE', comprType: 'COMPR_MRTH',
-    unit: '%', peak: er, proposedThreshold: 5, alarmLevel: 'Minor' };
-}
 
 // ── KPI 카드 ───────────────────────────────────────────────────
 interface KpiProps {
@@ -196,43 +218,42 @@ export interface DomainPanelFilters {
 interface Props {
   metrics: DomainMetrics;
   filters: DomainPanelFilters;
+  period: DomainPeriod;
+  /** 행 알람 아이콘 클릭 → 알람 설계 탭으로 전환하며 해당 서비스 포커스 */
+  onDesignAlarm: (svc: { name: string; opName: string }) => void;
 }
 
-export default function DomainMetricPanel({ metrics: m, filters }: Props) {
+export default function DomainMetricPanel({ metrics: m, filters, period, onDesignAlarm }: Props) {
   const errRateStr = m.errorRate == null ? '무오류' : `${m.errorRate.toFixed(2)}`;
   const [selectedEvent, setSelectedEvent] = useState<DomainAlarmEvent | null>(null);
-  const [registerProposal, setRegisterProposal] = useState<AlarmGapProposal | null>(null);
+  // 호출 추이 스코프 — null=도메인 전체 / 선택 시 해당 서비스 (처리량 상위 서비스 행 클릭)
+  const [selectedSvc, setSelectedSvc] = useState<{ name: string; opName: string } | null>(null);
+  const selectedKey = selectedSvc ? `${selectedSvc.name}|${selectedSvc.opName}` : null;
+  const { data: svcTrend, isFetching: trendLoading } = useServiceTrend(
+    m.domainId, selectedSvc?.name ?? null, selectedSvc?.opName ?? '', period,
+  );
+  const overlayData = selectedSvc && svcTrend ? svcTrend.hourlyOverlay : m.hourlyOverlay;
+  const toggleSvc = (b: DomainBreakdownItem) =>
+    setSelectedSvc((cur) =>
+      cur && cur.name === b.name && cur.opName === b.opName ? null : { name: b.name, opName: b.opName },
+    );
 
-  // 행→알람: 해당 서비스에 AI 공백 제안이 있으면 그 값으로, 없으면 통계 기반 수동 기본값으로 프리필
+  // 행 알람 아이콘: AI 제안 있는 서비스는 인디고로 강조(힌트). 등록 자체는 알람 설계 탭에서.
   const { data: gaps } = useAlarmGaps();
-  const aiBySvc = useMemo(() => {
-    const map = new Map<string, AlarmGapProposal>();
-    (gaps?.proposals ?? []).forEach((p) => {
-      const k = `${p.svcNm}|${p.opNm}`;
-      if (!map.has(k)) map.set(k, p);
-    });
-    return map;
-  }, [gaps]);
-  const aiKeys = useMemo(() => new Set(aiBySvc.keys()), [aiBySvc]);
+  const aiKeys = useMemo(
+    () => new Set((gaps?.proposals ?? []).map((p) => `${p.svcNm}|${p.opNm}`)),
+    [gaps],
+  );
 
-  const openAlarm = (b: DomainBreakdownItem) => {
-    const ai = aiBySvc.get(`${b.name}|${b.opName}`);
-    setRegisterProposal(ai ?? manualProposal(b, m.domainId));
-  };
+  const openAlarm = (b: DomainBreakdownItem) => onDesignAlarm({ name: b.name, opName: b.opName });
 
   // ── 상단 공통 필터 적용 (클라이언트) ──
   const q = filters.svcQuery.trim().toLowerCase();
   const hasFilter = q !== '' || filters.level !== 'all' || filters.status !== 'all';
 
-  const filteredBreakdown = useMemo(
-    () =>
-      q
-        ? m.breakdown.filter(
-            (b) => b.name.toLowerCase().includes(q) || (b.opName ?? '').toLowerCase().includes(q),
-          )
-        : m.breakdown,
-    [m.breakdown, q],
-  );
+  const filteredBreakdown = useMemo(() => filterBySvc(m.breakdown, q), [m.breakdown, q]);
+  const filteredErrRate = useMemo(() => filterBySvc(m.breakdownByErrorRate ?? [], q), [m.breakdownByErrorRate, q]);
+  const filteredErrCount = useMemo(() => filterBySvc(m.breakdownByErrorCount ?? [], q), [m.breakdownByErrorCount, q]);
 
   const filteredAlarms = useMemo(
     () =>
@@ -285,8 +306,14 @@ export default function DomainMetricPanel({ metrics: m, filters }: Props) {
           tooltipLabel="최대응답" valueFormatter={fmtMs} />
       </Box>
 
-      {/* ── 시간대별 오버레이 차트 (정상·응답·오류) ── */}
-      <HourlyOverlayChart data={m.hourlyOverlay} />
+      {/* ── 시간대별 오버레이 차트 (기본 도메인 전체 · 서비스 클릭 시 해당 서비스) ── */}
+      <HourlyOverlayChart
+        data={overlayData}
+        scopeLabel={selectedSvc ? `${selectedSvc.name}${selectedSvc.opName ? ' · ' + selectedSvc.opName : ''}` : undefined}
+        onClear={() => setSelectedSvc(null)}
+        loading={!!selectedSvc && trendLoading}
+        onAnomalyClick={() => onDesignAlarm(selectedSvc ?? { name: '', opName: '' })}
+      />
 
       {/* ── 서비스 granular 목록 ── */}
       <Box sx={{ borderRadius: 2, border: '1px solid rgba(255,255,255,0.07)', backgroundColor: 'rgba(255,255,255,0.02)', overflow: 'hidden' }}>
@@ -306,6 +333,14 @@ export default function DomainMetricPanel({ metrics: m, filters }: Props) {
             </Typography>
           </Tooltip>
         </Box>
+        {/* 목록 정의 안내 (모니터링: 현재창 실측 스냅샷) */}
+        <Box sx={{ px: 1.75, pt: 0.75 }}>
+          <Typography sx={{ fontSize: '0.6rem', color: 'text.disabled', lineHeight: 1.6 }}>
+            정상·오류·응답은 <Box component="span" sx={{ fontWeight: 700 }}>선택 기간(상단 토글) 실측 스냅샷</Box>.
+            {' · '}<Box component="span" sx={{ color: '#A5B4FC' }}>행을 클릭하면 위 호출 추이가 해당 서비스로 전환</Box>됩니다.
+            {' · '}행 <Box component="span" sx={{ color: '#A5B4FC' }}>알람 아이콘(🔔)</Box>을 누르면 <Box component="span" sx={{ color: '#A5B4FC', fontWeight: 700 }}>알람 설계 탭</Box>에서 축적 통계 기준으로 등록합니다.
+          </Typography>
+        </Box>
         {filteredBreakdown.length === 0 ? (
           <Box sx={{ px: 1.75, py: 2.5, textAlign: 'center' }}>
             <Typography sx={{ fontSize: '0.72rem', color: 'text.disabled' }}>
@@ -317,9 +352,40 @@ export default function DomainMetricPanel({ metrics: m, filters }: Props) {
             items={filteredBreakdown}
             aiKeys={aiKeys}
             onAlarm={openAlarm}
+            onSelect={toggleSvc}
+            selectedKey={selectedKey}
+            variant="monitor"
           />
         )}
       </Box>
+
+      {/* ── 오류율 상위 서비스 (처리량과 별개로 서버가 오류율 기준 랭킹) ── */}
+      <ErrorRankSection
+        title="오류율 상위 서비스"
+        hint="전체 호출 대비 (시스템+비즈니스) 오류 비율이 높은 서비스 (소표본 노이즈 제외)"
+        list={filteredErrRate}
+        total={(m.breakdownByErrorRate ?? []).length}
+        variant="errrate"
+        q={q}
+        aiKeys={aiKeys}
+        onAlarm={openAlarm}
+        onSelect={toggleSvc}
+        selectedKey={selectedKey}
+      />
+
+      {/* ── 오류건수 상위 서비스 ── */}
+      <ErrorRankSection
+        title="오류건수 상위 서비스"
+        hint="발생한 오류 건수(시스템+비즈니스)가 많은 서비스"
+        list={filteredErrCount}
+        total={(m.breakdownByErrorCount ?? []).length}
+        variant="errcount"
+        q={q}
+        aiKeys={aiKeys}
+        onAlarm={openAlarm}
+        onSelect={toggleSvc}
+        selectedKey={selectedKey}
+      />
 
       {/* ── 금일 발생 알람 이력 ── */}
       <AlarmHistoryPanel
@@ -331,16 +397,6 @@ export default function DomainMetricPanel({ metrics: m, filters }: Props) {
 
       {/* 이력 상세 */}
       <AlarmEventDetailDialog event={selectedEvent} onClose={() => setSelectedEvent(null)} />
-
-      {/* 행→알람 등록 */}
-      {registerProposal && (
-        <AlarmRegisterDialog
-          key={`${registerProposal.svcNm}|${registerProposal.opNm}|${registerProposal.detectType}`}
-          proposal={registerProposal}
-          onClose={() => setRegisterProposal(null)}
-          onRegistered={() => setRegisterProposal(null)}
-        />
-      )}
     </Box>
   );
 }

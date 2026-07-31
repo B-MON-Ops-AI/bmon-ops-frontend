@@ -32,7 +32,7 @@ import dayjs from "dayjs";
 import { useDomainMetrics } from "@/features/dashboard";
 import type { DomainId, DomainPeriod } from "@/entities/dashboard";
 import DomainMetricPanel from "./DomainMetricPanel";
-import AlarmGapPanel from "./AlarmGapPanel";
+import AlarmDesignPanel from "./AlarmDesignPanel";
 
 const DOMAIN_TABS: { id: DomainId; label: string }[] = [
   { id: "all", label: "전체" },
@@ -43,9 +43,11 @@ const DOMAIN_TABS: { id: DomainId; label: string }[] = [
 ];
 
 const PERIOD_LABEL: Record<DomainPeriod, { window: string; poll: string }> = {
-  "10m": { window: "최근 10분 집계", poll: "10분마다 갱신" },
-  "1d": { window: "최근 1일 집계", poll: "1일마다 갱신" },
+  "10m": { window: "최근 10분", poll: "10분마다 갱신" },
+  "1h": { window: "최근 1시간", poll: "10분마다 갱신" },
 };
+
+type WallView = "monitor" | "design";
 
 // 상단 공통 필터 옵션 (알람 이력 필터용)
 const LEVEL_OPTIONS: { value: string; label: string }[] = [
@@ -80,6 +82,10 @@ const compactField = {
 export default function CustomWallTab() {
   const [domainIdx, setDomainIdx] = useState(0);
   const [period, setPeriod] = useState<DomainPeriod>("10m");
+  // 서브탭 — 모니터링(이동창 상태) / 알람 설계(축적 통계 임계·등록)
+  const [view, setView] = useState<WallView>("monitor");
+  // 모니터링 → 알람 설계 전환 시 포커스할 서비스 (등록 다이얼로그 자동 오픈)
+  const [focusSvc, setFocusSvc] = useState<{ name: string; opName: string } | null>(null);
   // 상단 공통 필터 (클라이언트) — 서비스 검색 · 등급 · 처리상태
   const [svcQuery, setSvcQuery] = useState("");
   const [level, setLevel] = useState("all");
@@ -93,6 +99,12 @@ export default function CustomWallTab() {
     setStatus("all");
   };
 
+  // 모니터링 목록 행의 알람 아이콘 → 알람 설계 탭으로 전환하며 해당 서비스 포커스
+  const gotoDesign = (svc: { name: string; opName: string }) => {
+    setFocusSvc(svc);
+    setView("design");
+  };
+
   const currentId = DOMAIN_TABS[domainIdx].id;
   const metrics = data?.domains.find((d) => d.domainId === currentId) ?? null;
   const asOf = data?.asOf;
@@ -100,101 +112,14 @@ export default function CustomWallTab() {
 
   return (
     <>
-      {/* ── 헤더 ── */}
-      <Box
-        sx={{
-          mb: 2,
-          display: "flex",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
-          gap: 2,
-          flexWrap: "wrap",
-        }}
-      >
-        <Box>
-          <Typography variant="h6" fontWeight={700} sx={{ lineHeight: 1.3 }}>
-            도메인 운영지표
-          </Typography>
-          <Typography variant="caption" color="text.secondary">
-            도메인별 실측 처리량·오류율·응답시간을 주기적으로 집계해 확인합니다.
-          </Typography>
-        </Box>
-
-        {/* 집계 주기 토글 + 기준시각 */}
-        <Box
-          sx={{ display: "flex", alignItems: "center", gap: 1, flexShrink: 0 }}
-        >
-          <ToggleButtonGroup
-            value={period}
-            exclusive
-            size="small"
-            onChange={(_, v: DomainPeriod | null) => v && setPeriod(v)}
-            sx={{
-              "& .MuiToggleButton-root": {
-                px: 1.5,
-                py: 0.4,
-                fontSize: "0.72rem",
-                textTransform: "none",
-                color: "text.disabled",
-                borderColor: "rgba(255,255,255,0.12)",
-                "&.Mui-selected": {
-                  color: "#A5B4FC",
-                  backgroundColor: "rgba(99,102,241,0.15)",
-                  borderColor: "rgba(99,102,241,0.4)",
-                  "&:hover": { backgroundColor: "rgba(99,102,241,0.22)" },
-                },
-              },
-            }}
-          >
-            <ToggleButton value="10m">10분</ToggleButton>
-            <ToggleButton value="1d">1일</ToggleButton>
-          </ToggleButtonGroup>
-
-          <Box
-            sx={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "flex-end",
-              gap: 0.4,
-            }}
-          >
-            <Chip
-              icon={
-                <ScheduleIcon
-                  sx={{
-                    fontSize: "13px !important",
-                    color: "#818CF8 !important",
-                  }}
-                />
-              }
-              label={
-                pl.window +
-                (asOf ? ` · ${dayjs(asOf).format("MM/DD HH:mm")} 기준` : "")
-              }
-              size="small"
-              sx={{
-                height: 22,
-                fontSize: "0.66rem",
-                fontWeight: 600,
-                backgroundColor: "rgba(99,102,241,0.12)",
-                color: "#A5B4FC",
-                border: "1px solid rgba(99,102,241,0.25)",
-                "& .MuiChip-label": { px: 0.75 },
-              }}
-            />
-            <Box
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                gap: 0.4,
-                color: "text.disabled",
-              }}
-            >
-              <AutorenewIcon sx={{ fontSize: 12 }} />
-              <Typography sx={{ fontSize: "0.62rem" }}>{pl.poll}</Typography>
-            </Box>
-          </Box>
-        </Box>
+      {/* ── 헤더 (제목) ── */}
+      <Box sx={{ mb: 2 }}>
+        <Typography variant="h6" fontWeight={700} sx={{ lineHeight: 1.3 }}>
+          도메인 운영지표
+        </Typography>
+        <Typography variant="caption" color="text.secondary">
+          도메인별 실측 상태를 모니터링하고, 축적 통계로 알람 임계를 설계합니다.
+        </Typography>
       </Box>
 
       {/* ── 도메인 탭 ── */}
@@ -223,6 +148,41 @@ export default function CustomWallTab() {
             <Tab key={d.id} label={d.label} />
           ))}
         </Tabs>
+      </Box>
+
+      {/* ── 서브탭 (모니터링 / 알람 설계) ── */}
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2.5, flexWrap: "wrap" }}>
+        <ToggleButtonGroup
+          value={view}
+          exclusive
+          size="small"
+          onChange={(_, v: WallView | null) => v && setView(v)}
+          sx={{
+            "& .MuiToggleButton-root": {
+              px: 1.75,
+              py: 0.5,
+              fontSize: "0.78rem",
+              fontWeight: 600,
+              textTransform: "none",
+              color: "text.disabled",
+              borderColor: "rgba(255,255,255,0.12)",
+              "&.Mui-selected": {
+                color: "#A5B4FC",
+                backgroundColor: "rgba(99,102,241,0.15)",
+                borderColor: "rgba(99,102,241,0.4)",
+                "&:hover": { backgroundColor: "rgba(99,102,241,0.22)" },
+              },
+            },
+          }}
+        >
+          <ToggleButton value="monitor">모니터링</ToggleButton>
+          <ToggleButton value="design">알람 설계</ToggleButton>
+        </ToggleButtonGroup>
+        <Typography sx={{ fontSize: "0.66rem", color: "text.disabled" }}>
+          {view === "monitor"
+            ? "이동창(10분/1시간) 실측 상태"
+            : "축적 통계 기준 임계 결정·등록 (기간 토글 무관)"}
+        </Typography>
       </Box>
 
       {/* ── 상단 공통 필터 (서비스 검색 · 등급 · 처리상태) ── */}
@@ -297,27 +257,103 @@ export default function CustomWallTab() {
             초기화
           </Button>
         )}
+
+        {/* 모니터링 전용 — 기간 토글 · 기준시각 · 갱신 (필터와 같은 행 우측) */}
+        {view === "monitor" && (
+          <Box sx={{ ml: "auto", display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+            <ToggleButtonGroup
+              value={period}
+              exclusive
+              size="small"
+              onChange={(_, v: DomainPeriod | null) => v && setPeriod(v)}
+              sx={{
+                "& .MuiToggleButton-root": {
+                  px: 1.5,
+                  py: 0.4,
+                  fontSize: "0.72rem",
+                  textTransform: "none",
+                  color: "text.disabled",
+                  borderColor: "rgba(255,255,255,0.12)",
+                  "&.Mui-selected": {
+                    color: "#A5B4FC",
+                    backgroundColor: "rgba(99,102,241,0.15)",
+                    borderColor: "rgba(99,102,241,0.4)",
+                    "&:hover": { backgroundColor: "rgba(99,102,241,0.22)" },
+                  },
+                },
+              }}
+            >
+              <ToggleButton value="10m">10분</ToggleButton>
+              <ToggleButton value="1h">1시간</ToggleButton>
+            </ToggleButtonGroup>
+
+            <Chip
+              icon={
+                <ScheduleIcon sx={{ fontSize: "13px !important", color: "#818CF8 !important" }} />
+              }
+              label={pl.window + (asOf ? ` · ${dayjs(asOf).format("MM/DD HH:mm")} 기준` : "")}
+              size="small"
+              sx={{
+                height: 22,
+                fontSize: "0.66rem",
+                fontWeight: 600,
+                backgroundColor: "rgba(99,102,241,0.12)",
+                color: "#A5B4FC",
+                border: "1px solid rgba(99,102,241,0.25)",
+                "& .MuiChip-label": { px: 0.75 },
+              }}
+            />
+
+            <Box sx={{ display: "flex", alignItems: "center", gap: 0.4, color: "text.disabled" }}>
+              <AutorenewIcon sx={{ fontSize: 12 }} />
+              <Typography sx={{ fontSize: "0.62rem" }}>{pl.poll}</Typography>
+            </Box>
+          </Box>
+        )}
       </Box>
 
-      {/* ── AI 알람 제안 (해당 도메인 공백) ── */}
-      <AlarmGapPanel domainId={currentId} />
+      {/* ── 모니터링 뷰 ── */}
+      {view === "monitor" && (
+        <>
+          {isLoading ? (
+            <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
+              <CircularProgress />
+            </Box>
+          ) : metrics ? (
+            <DomainMetricPanel
+              key={currentId}
+              metrics={metrics}
+              filters={{ svcQuery, level, status }}
+              period={period}
+              onDesignAlarm={gotoDesign}
+            />
+          ) : (
+            <Box sx={{ textAlign: "center", py: 8 }}>
+              <Typography color="text.secondary">표시할 지표가 없습니다.</Typography>
+            </Box>
+          )}
+        </>
+      )}
 
-      {/* ── 지표 패널 ── */}
-      {isLoading ? (
-        <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
-          <CircularProgress />
-        </Box>
-      ) : metrics ? (
-        <DomainMetricPanel
-          metrics={metrics}
-          filters={{ svcQuery, level, status }}
-        />
-      ) : (
-        <Box sx={{ textAlign: "center", py: 8 }}>
-          <Typography color="text.secondary">
-            표시할 지표가 없습니다.
-          </Typography>
-        </Box>
+      {/* ── 알람 설계 뷰 ── */}
+      {view === "design" && (
+        isLoading ? (
+          <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
+            <CircularProgress />
+          </Box>
+        ) : metrics ? (
+          <AlarmDesignPanel
+            key={currentId}
+            metrics={metrics}
+            filters={{ svcQuery }}
+            focusSvc={focusSvc}
+            onFocusConsumed={() => setFocusSvc(null)}
+          />
+        ) : (
+          <Box sx={{ textAlign: "center", py: 8 }}>
+            <Typography color="text.secondary">표시할 지표가 없습니다.</Typography>
+          </Box>
+        )
       )}
     </>
   );

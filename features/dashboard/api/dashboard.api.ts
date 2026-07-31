@@ -4,7 +4,7 @@
  * @module features/dashboard/api
  */
 import { dashboardClient } from '@/shared/api';
-import type { DomainMetricsResponse, DomainPeriod } from '@/entities/dashboard';
+import type { DomainMetricsResponse, DomainPeriod, ServiceTrendResponse } from '@/entities/dashboard';
 
 export const dashboardApi = {
   getSummary: (days = 7) =>
@@ -16,5 +16,12 @@ export const dashboardApi = {
   getDomainMetrics: (period: DomainPeriod = '10m') =>
     dashboardClient()
       .get<DomainMetricsResponse>('/dashboard/domain-metrics', { params: { period } })
+      .then((r) => r.data),
+
+  getServiceTrend: (domainId: string, svc: string, op: string, period: DomainPeriod = '10m') =>
+    dashboardClient()
+      .get<ServiceTrendResponse>('/dashboard/domain-metrics/service-trend', {
+        params: { domainId, svc, op, period },
+      })
       .then((r) => r.data),
 };
