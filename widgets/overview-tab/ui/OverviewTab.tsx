@@ -271,8 +271,10 @@ function SeverityTrendChart({ data, xKey, interval, tickFormatter }: {
         <YAxis tick={{ fill: C.muted, fontSize: 11 }} allowDecimals={false} domain={[0, (dataMax: number) => Math.max(dataMax, 5)]} />
         <Tooltip content={<DarkTooltip />} />
         <Legend formatter={(v) => <span style={{ color: C.muted, fontSize: '0.7rem' }}>{v}</span>} wrapperStyle={{ paddingTop: 8 }} />
+        {/* 비누적(겹침) — 각 등급을 0 기준으로 그려 실제 크기를 직접 비교.
+            누적(stackId) 시 작은 등급이 큰 등급 위에 얹혀 더 커 보이는 오해를 방지. */}
         {SEV_AREAS.filter((a) => active.includes(a.key)).map((a) => (
-          <Area key={a.key} type="monotone" dataKey={a.key} name={a.name} stackId="1"
+          <Area key={a.key} type="monotone" dataKey={a.key} name={a.name}
             stroke={a.color} fill={`url(#${a.grad})`} strokeWidth={2} dot={false} />
         ))}
       </AreaChart>

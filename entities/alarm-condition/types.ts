@@ -53,7 +53,7 @@ export interface AlarmGapProposal {
   svcNm: string;
   opNm: string;
   domnId: string;
-  metric: string;            // '오류율' | '최대응답' | '시스템오류' | '비즈니스 오류' | '호출량'
+  metric: string;            // '오류율' | '응답시간' | '최대응답' | '시스템오류' | '비즈니스 오류' | '호출량'
   detectType: DetectType;
   comprType: ComprType;      // COMPR_MRTH(이상) | COMPR_BLW(이하)
   type: string;              // '상대' | '절대'
@@ -106,7 +106,8 @@ export interface AlarmGapEvidenceHour {
   errS: number;              // 시스템오류 건수
   errE: number;              // 비즈니스 오류 건수
   errRate: number;           // 오류율(%)
-  maxRpy: number;            // 최대응답(ms)
+  maxRpy: number;            // 최대응답(ms, 그 시간 내 순간 최댓값 — 참고용)
+  avgRpy: number;            // 평균응답(ms, tot_rpy/deal_i — RPY_TIME 제안 판정 기준)
   value: number;             // detectType 지표값 (제안 판정과 동일 정의)
   baseline: number | null;      // 같은요일 28일 그 시간대 평소값(평균)
   baselineMin: number | null;   // 같은요일 그 시간대 최소

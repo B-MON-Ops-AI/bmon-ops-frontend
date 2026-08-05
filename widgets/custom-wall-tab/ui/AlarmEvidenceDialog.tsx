@@ -25,13 +25,15 @@ import {
 import { useAlarmGapEvidence, useProposalInsight } from '@/features/alarm-conditions';
 import type { AlarmGapProposal, AlarmGapEvidenceHour, AlarmGapEvidenceHistory, DetectType } from '@/entities/alarm-condition';
 
+// refDow = DB stat_dow. BE(ai_analysis_service)가 0=일 규약으로 해석하므로 0-index로 매핑.
+// (pgDOW 0=일 / ISODOW 1=월 두 규약 모두 값 1~6은 동일, 일요일만 0/7로 갈려 둘 다 '일'로 처리)
 const DOW_LABEL: Record<string, string> = {
-  '1': '일', '2': '월', '3': '화', '4': '수', '5': '목', '6': '금', '7': '토',
+  '0': '일', '1': '월', '2': '화', '3': '수', '4': '목', '5': '금', '6': '토', '7': '일',
 };
 
 // detectType → 강조할 실측 컬럼
 const METRIC_COL: Record<DetectType, keyof AlarmGapEvidenceHour> = {
-  ERR_RATE: 'errRate', RPY_TIME: 'maxRpy', ERR_S: 'errS', ERR_E: 'errE', CALL_CASCNT: 'n',
+  ERR_RATE: 'errRate', RPY_TIME: 'avgRpy', ERR_S: 'errS', ERR_E: 'errE', CALL_CASCNT: 'n',
 };
 
 function fmtMs(ms: number): string {
@@ -147,7 +149,8 @@ export default function AlarmEvidenceDialog({ proposal: p, onClose }: Props) {
       hourly[0]).time
     : null;
 
-  const dowLabel = data?.refDow ? DOW_LABEL[String(data.refDow)] ?? '' : '';
+  // refDow=0(일요일)도 유효값이므로 truthy 검사 대신 null 검사.
+  const dowLabel = data?.refDow != null ? DOW_LABEL[String(data.refDow)] ?? '' : '';
 
   return (
     <Dialog open onClose={onClose} maxWidth="md" fullWidth
@@ -259,7 +262,7 @@ export default function AlarmEvidenceDialog({ proposal: p, onClose }: Props) {
               <Box component="table" sx={{ width: '100%', minWidth: 640, borderCollapse: 'collapse', fontVariantNumeric: 'tabular-nums' }}>
                 <Box component="thead">
                   <Box component="tr">
-                    {['시각', '호출수', '오류(S)', '오류(E)', '오류율', '최대응답', '평소(범위)'].map((h, i) => (
+                    {['시각', '호출수', '오류(S)', '오류(E)', '오류율', '최대응답', '평균응답', '평소(범위)'].map((h, i) => (
                       <Box component="th" key={h}
                         sx={{ position: 'sticky', top: 0, zIndex: 1, backgroundColor: 'rgba(23,27,38,0.98)',
                           px: 1, py: 0.9, fontSize: '0.66rem', fontWeight: 700, color: 'text.disabled',
@@ -308,6 +311,9 @@ export default function AlarmEvidenceDialog({ proposal: p, onClose }: Props) {
                         </Box>
                         <Box component="td" sx={{ ...cellSx('maxRpy'), color: hi('maxRpy') ? '#A5B4FC' : h.maxRpy >= 5000 ? '#FB923C' : 'text.secondary' }}>
                           {fmtMs(h.maxRpy)}
+                        </Box>
+                        <Box component="td" sx={{ ...cellSx('avgRpy'), color: hi('avgRpy') ? '#A5B4FC' : h.avgRpy >= 1000 ? '#FB923C' : 'text.secondary' }}>
+                          {fmtMs(h.avgRpy)}
                         </Box>
                         <Box component="td" sx={{ px: 1, py: 0.8, fontSize: '0.7rem', textAlign: 'right',
                           color: 'text.disabled', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
